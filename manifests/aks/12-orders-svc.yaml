@@ -1,0 +1,21 @@
+# orders Service — ClusterIP on port 80 -> container 8080.
+apiVersion: v1
+kind: Service
+metadata:
+  name: orders
+  namespace: sock-shop
+  labels:
+    name: orders
+    app: orders
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    name: orders

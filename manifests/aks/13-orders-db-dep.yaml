@@ -1,0 +1,109 @@
+# orders-db Deployment — MongoDB 4 for the orders service.
+# Ephemeral demo data; swap emptyDir for managed-csi PVC to persist orders.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orders-db
+  namespace: sock-shop
+  labels:
+    name: orders-db
+    app: orders-db
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      name: orders-db
+  template:
+    metadata:
+      labels:
+        name: orders-db
+        app: orders-db
+      annotations:
+        prometheus.io/scrape: "false"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: orders-db
+          image: mongo:4
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: mongo
+              containerPort: 27017
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: sock-shop-config
+          env:
+            - name: MONGODB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: mongodb-username
+            - name: MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: mongodb-password
+            - name: MONGODB_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: sock-shop-config
+                  key: ORDERS_DB_DATABASE
+            - name: MONGODB_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: mongodb-password
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 384Mi
+          livenessProbe:
+            exec:
+              command:
+                - mongo
+                - --eval
+                - "db.adminCommand('ping')"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - mongo
+                - --eval
+                - "db.adminCommand('ping')"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: orders-db-data
+              mountPath: /data/db
+            - name: tmp-volume
+              mountPath: /tmp
+      volumes:
+        - name: orders-db-data
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+        - name: tmp-volume
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi

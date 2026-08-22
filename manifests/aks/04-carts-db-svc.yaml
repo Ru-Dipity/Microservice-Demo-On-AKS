@@ -1,0 +1,19 @@
+# carts-db Service — internal ClusterIP reachable only by in-cluster clients.
+# Maps port 27017 (default MongoDB port) to container port 27017.
+apiVersion: v1
+kind: Service
+metadata:
+  name: carts-db
+  namespace: sock-shop
+  labels:
+    name: carts-db
+    app: carts-db
+spec:
+  type: ClusterIP
+  ports:
+    - name: mongo
+      port: 27017
+      targetPort: 27017
+      protocol: TCP
+  selector:
+    name: carts-db

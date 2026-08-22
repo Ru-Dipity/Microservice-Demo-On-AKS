@@ -1,0 +1,287 @@
+# ----------------------------------------------------------------------------
+# Helm values for kube-prometheus-stack, targeting Azure Kubernetes Service.
+#
+# Install with:
+#   helm repo add prometheus-community \
+#     https://prometheus-community.github.io/helm-charts
+#   helm repo update
+#   helm upgrade --install kube-prometheus-stack \
+#     prometheus-community/kube-prometheus-stack \
+#     --namespace monitoring --create-namespace \
+#     --version 58.0.0 \
+#     --values kube-prometheus-stack-values.yaml
+#
+# NOTES:
+#   * Prometheus data and Grafana configs both use managed-csi (Azure Disk)
+#     persistent volumes so they survive Pod restarts / node upgrades.
+#   * Adjust `storageSpec` sizes to fit your AKS SKU / expected retention.
+#   * We deliberately disable components the demo does not need
+#     (thanosRuler, kubeEtcd scrape, Alertmanager HA). Enable if required.
+# ----------------------------------------------------------------------------
+
+# ----------------------------------------------------------------------------
+# Global defaults that flow into every sub-chart.
+# ----------------------------------------------------------------------------
+global:
+  scrape_interval: 15s            # Default SD scrape cadence
+  evaluation_interval: 15s        # Recording / alerting rule evaluation
+  scrape_timeout: 10s
+  # External labels attached to every series written to remote write /
+  # Alertmanager notifications. Identify this cluster distinctly.
+  external_labels:
+    cluster: sock-shop-aks
+    environment: demo
+    region: azure # replace with your AKS region, e.g. westeurope
+
+# ----------------------------------------------------------------------------
+# Prometheus operator itself (the controller that reconciles Prometheus CRs,
+# ServiceMonitors, PodMonitors, PrometheusRules).
+# ----------------------------------------------------------------------------
+prometheusOperator:
+  enabled: true
+  replicas: 1
+  resources:
+    requests:
+      cpu: 100m
+      memory: 200Mi
+    limits:
+      cpu: 500m
+      memory: 512Mi
+  # Adopt ServiceMonitors / PodMonitors bearing the release label we set on
+  # our own CRs (see sock-shop-servicemonitor.yaml).
+  admissionWebhooks:
+    failurePolicy: Ignore
+    patch:
+      enabled: true
+
+# ----------------------------------------------------------------------------
+# Prometheus server — stores metrics, evaluates rules, exposes /graph UI.
+# ----------------------------------------------------------------------------
+prometheus:
+  enabled: true
+  prometheusSpec:
+    replicas: 1
+    # Do not run HA demo — single replica uses less quota.
+    podAntiAffinity: ""
+    retention: 15d                  # Keep 15 days of sample data
+    retentionSize: "30GB"           # Or evict when disk hits 30GB
+    # Enforce an upper bound on TSDB storage growth.
+    enableFeatures: []
+    # Scrape any ServiceMonitor/PodMonitor/PrometheusRule that matches
+    # the `release: kube-prometheus-stack` label (set on our CRs above).
+    serviceMonitorSelector:
+      matchLabels:
+        release: kube-prometheus-stack
+    serviceMonitorNamespaceSelector: {}   # Discover SMonitors in any namespace
+    podMonitorSelector:
+      matchLabels:
+        release: kube-prometheus-stack
+    podMonitorNamespaceSelector: {}
+    ruleSelector:
+      matchLabels:
+        release: kube-prometheus-stack
+    ruleNamespaceSelector: {}
+    # Scrape the default prometheus.io annotation-based targets too (fallback).
+    additionalScrapeConfigs:
+      - job_name: kubernetes-pods-annotations
+        kubernetes_sd_configs:
+          - role: pod
+        relabel_configs:
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_scrape]
+            action: keep
+            regex: "true"
+          - source_labels: [__meta_kubernetes_pod_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          - source_labels: [__address__, __meta_kubernetes_pod_annotation_prometheus_io_port]
+            action: replace
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+            target_label: __address__
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_pod_label_app]
+            target_label: app
+    # Resource caps prevent Prometheus from consuming the whole cluster.
+    resources:
+      requests:
+        cpu: 1
+        memory: 4Gi
+      limits:
+        cpu: 4
+        memory: 12Gi
+    # Persistent storage — use AKS managed-csi class (Azure SSD / StandardSSD).
+    # If your cluster uses a different StorageClass (e.g. managed-premium)
+    # change storageClassName accordingly.
+    storageSpec:
+      disableMountSubPath: false
+      volumeClaimTemplate:
+        spec:
+          storageClassName: managed-csi
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 50Gi
+    # Pod Anti-affinity — leave empty for single-replica demo.
+    affinity: {}
+    tolerations: []
+    nodeSelector:
+      kubernetes.io/os: linux
+    securityContext:
+      fsGroup: 2000
+      runAsNonRoot: true
+      runAsUser: 1000
+      seccompProfile:
+        type: RuntimeDefault
+
+  # Ingress for Prometheus UI. Comment out / switch to AGIC as desired.
+  ingress:
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: "nginx"
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    hosts:
+      # Replace with a real DNS name you own + point to the Ingress controller IP.
+      - prometheus.sock-shop.example.com
+    paths:
+      - "/"
+    pathType: Prefix
+    # tls: []  # configure once cert-manager is installed
+
+  # Service to reach the Prometheus server inside the cluster.
+  service:
+    type: ClusterIP
+    port: 9090
+    targetPort: 9090
+
+# ----------------------------------------------------------------------------
+# Grafana — built-in dashboards, Prometheus datasource pre-configured,
+# persistent dashboard storage via PVC.
+# ----------------------------------------------------------------------------
+grafana:
+  enabled: true
+  replicas: 1
+  # Admin credentials — override via Secret or values for production!
+  adminUser: admin
+  adminPassword: admin123
+  # Pull dashboards from the ConfigMaps we create in this directory.
+  sidecar:
+    dashboards:
+      enabled: true
+      label: grafana_dashboard
+      labelValue: "1"
+      searchNamespace: ALL
+      provider:
+        foldersFromFilesStructure: true
+    datasources:
+      enabled: true
+      label: grafana_datasource
+      labelValue: "1"
+  # Persistent storage for Grafana (dashboards, users, settings) survives restarts.
+  persistence:
+    enabled: true
+    storageClassName: managed-csi
+    accessModes: ["ReadWriteOnce"]
+    size: 10Gi
+  resources:
+    requests:
+      cpu: 100m
+      memory: 256Mi
+    limits:
+      cpu: 1
+      memory: 1Gi
+  securityContext:
+    runAsNonRoot: true
+    runAsUser: 472
+    fsGroup: 472
+  # Ingress for Grafana UI.
+  ingress:
+    enabled: true
+    annotations:
+      kubernetes.io/ingress.class: "nginx"
+      nginx.ingress.kubernetes.io/ssl-redirect: "false"
+    hosts:
+      - grafana.sock-shop.example.com
+    paths:
+      - "/"
+    pathType: Prefix
+    # tls: []  # configure for HTTPS
+  service:
+    type: ClusterIP
+    port: 80
+    targetPort: 3000
+
+# ----------------------------------------------------------------------------
+# Alertmanager — lightweight single replica for the demo.
+# ----------------------------------------------------------------------------
+alertmanager:
+  enabled: true
+  alertmanagerSpec:
+    replicas: 1
+    retention: 120h                 # 5 days of firing alerts
+    resources:
+      requests:
+        cpu: 50m
+        memory: 128Mi
+      limits:
+        cpu: 200m
+        memory: 512Mi
+    storage:
+      volumeClaimTemplate:
+        spec:
+          storageClassName: managed-csi
+          accessModes: ["ReadWriteOnce"]
+          resources:
+            requests:
+              storage: 10Gi
+
+# ----------------------------------------------------------------------------
+# kube-state-metrics — exposes Kubernetes object state (Deployments, Nodes…).
+# ----------------------------------------------------------------------------
+kube-state-metrics:
+  enabled: true
+  resources:
+    requests:
+      cpu: 50m
+      memory: 128Mi
+    limits:
+      cpu: 200m
+      memory: 384Mi
+
+# ----------------------------------------------------------------------------
+# Node exporter — per-node DaemonSet exposing host-level metrics.
+# On AKS Linux nodes only (Windows nodes are excluded by nodeSelector).
+# ----------------------------------------------------------------------------
+prometheus-node-exporter:
+  enabled: true
+  nodeSelector:
+    kubernetes.io/os: linux
+  resources:
+    requests:
+      cpu: 10m
+      memory: 32Mi
+    limits:
+      cpu: 100m
+      memory: 128Mi
+
+# ----------------------------------------------------------------------------
+# Disable components the demo does not need but the chart ships enabled by default.
+# ----------------------------------------------------------------------------
+kubeApiServer:
+  enabled: true
+kubelet:
+  enabled: true
+kubeControllerManager:
+  enabled: false          # AKS: control plane is managed, no endpoint to scrape
+kubeScheduler:
+  enabled: false          # AKS: control plane is managed, no endpoint to scrape
+kubeProxy:
+  enabled: false
+kubeEtcd:
+  enabled: false          # AKS: control plane is managed, no endpoint to scrape
+coreDns:
+  enabled: true
+  service:
+    port: 9153
+    targetPort: 9153

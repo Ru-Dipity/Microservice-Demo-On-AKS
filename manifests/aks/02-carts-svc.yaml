@@ -1,0 +1,26 @@
+# carts Service — ClusterIP (internal only). Exposes carts Deployment on
+# port 80 internally, forwards to container port 8080. Front-end reaches
+# carts via http://carts.sock-shop.svc.cluster.local.
+apiVersion: v1
+kind: Service
+metadata:
+  name: carts
+  namespace: sock-shop
+  labels:
+    name: carts
+    app: carts
+  # Prometheus Kubernetes SD will discover this Service via annotations
+  # and scrape its backing Pods (prometheus.io/port on Pod template).
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/scheme: "http"
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    name: carts

@@ -1,0 +1,21 @@
+# queue-master Service — ClusterIP (metrics exposure only).
+apiVersion: v1
+kind: Service
+metadata:
+  name: queue-master
+  namespace: sock-shop
+  labels:
+    name: queue-master
+    app: queue-master
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8080
+      protocol: TCP
+  selector:
+    name: queue-master

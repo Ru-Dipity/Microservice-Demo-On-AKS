@@ -1,0 +1,114 @@
+# user Deployment — Go microservice for user registration / login / profile.
+# Connects to MongoDB (user-db) over port 27017. Exposes HTTP on 8080.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user
+  namespace: sock-shop
+  labels:
+    name: user
+    app: user
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      name: user
+  template:
+    metadata:
+      labels:
+        name: user
+        app: user
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: user
+          image: quay.io/powercloud/sock-shop-user:latest
+          imagePullPolicy: IfNotPresent
+          command: [ "/opt/user" ]
+          args:
+            - "-port=8080"
+            - "-mongo-host=$(USER_DB_HOST):$(USER_DB_PORT)"
+            - "-mongo-database=$(USER_DB_DATABASE)"
+            - "-mongo-user=$(USER_DB_USERNAME)"
+            - "-mongo-pass=$(USER_DB_PASSWORD)"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: sock-shop-config
+          env:
+            - name: HATEAOS
+              value: user
+            - name: USER_DATABASE
+              value: mongodb
+            - name: USER_DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: sock-shop-config
+                  key: USER_DB_HOST
+            - name: USER_DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: sock-shop-config
+                  key: USER_DB_PORT
+            - name: USER_DB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: userdb-database
+            - name: USER_DB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: userdb-username
+            - name: USER_DB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: userdb-password
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 300m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 120
+            periodSeconds: 20
+            timeoutSeconds: 5
+            failureThreshold: 8
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 4
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL

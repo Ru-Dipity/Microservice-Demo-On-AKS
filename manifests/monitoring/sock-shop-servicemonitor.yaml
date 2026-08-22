@@ -1,0 +1,55 @@
+# ----------------------------------------------------------------------------
+# ServiceMonitor for the Sock Shop application tier.
+#
+# ServiceMonitor is a CRD installed by kube-prometheus-stack. It tells
+# Prometheus to discover *any* Service with label `app.kubernetes.io/part-of:
+# sock-shop` in the sock-shop namespace and scrape its metrics endpoint.
+#
+# Each Pod template already carries prometheus.io/* annotations which are
+# honoured by the default Kubernetes SD scrape config too; a ServiceMonitor
+# gives us structured labels, relabelling rules, and namespace targeting.
+# ----------------------------------------------------------------------------
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: sock-shop-services
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack   # MUST match the Helm release name for Prom to pick it up
+    app: sock-shop
+spec:
+  # Which namespace(s) to look for Services in.
+  namespaceSelector:
+    matchNames:
+      - sock-shop
+  # Which Services to match — anything bearing the app label the Deployments set.
+  selector:
+    matchExpressions:
+      - key: app.kubernetes.io/part-of
+        operator: In
+        values:
+          - sock-shop
+  # One scrape endpoint per Service port named "http" or "exporter".
+  endpoints:
+    # Application HTTP metrics (Spring Boot / Go custom /metrics, /actuator/prometheus)
+    - port: http
+      interval: 15s
+      scrapeTimeout: 10s
+      path: /metrics
+      # Some services expose metrics under /actuator/prometheus instead; we
+      # configure a *separate* endpoint for Spring Boot. Overlap is harmless
+      # because Prometheus will skip targets that 404 on a specific path.
+      relabelings:
+        - sourceLabels: [__meta_kubernetes_service_label_app]
+          targetLabel: service_app
+          action: replace
+    # Spring Boot Actuator metrics (carts, orders, queue-master, shipping)
+    - port: http
+      interval: 30s
+      scrapeTimeout: 15s
+      path: /actuator/prometheus
+    # RabbitMQ exporter sidecar metrics
+    - port: exporter
+      interval: 30s
+      scrapeTimeout: 10s
+      path: /metrics

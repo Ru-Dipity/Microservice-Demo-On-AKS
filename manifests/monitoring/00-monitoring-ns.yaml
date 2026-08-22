@@ -1,0 +1,16 @@
+# Monitoring Namespace — separates Prometheus / Grafana from application workloads.
+# Applies the "baseline" Pod Security Standard (prometheus needs some capabilities
+# that restricted PSA would reject, e.g., host FS mounts for node_exporter).
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: monitoring
+  labels:
+    pod-security.kubernetes.io/enforce: baseline
+    pod-security.kubernetes.io/enforce-version: v1.29
+    pod-security.kubernetes.io/audit: baseline
+    pod-security.kubernetes.io/audit-version: v1.29
+    pod-security.kubernetes.io/warn: baseline
+    pod-security.kubernetes.io/warn-version: v1.29
+    # Tell Prometheus itself to discover targets inside this namespace.
+    monitoring: enabled

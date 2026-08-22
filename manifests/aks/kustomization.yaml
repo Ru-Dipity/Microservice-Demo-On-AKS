@@ -1,0 +1,87 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+metadata:
+  name: sock-shop-aks
+  namespace: sock-shop
+
+# Disable hash suffixes so resource names remain predictable
+# This makes ConfigMap/Secret references stable across deployments
+generatorOptions:
+  disableNameSuffixHash: true
+
+# Apply resources in FIFO order to ensure dependencies exist first
+sortOptions:
+  order: fifo
+
+# Labels applied to every resource produced by this Kustomization
+commonLabels:
+  app.kubernetes.io/part-of: sock-shop
+  app.kubernetes.io/managed-by: kustomize
+
+resources:
+  # Namespace must be created first; all other resources are scoped to it
+  - 00-sock-shop-ns.yaml
+  # Non-sensitive application configuration (URLs, feature flags, log levels)
+  - 00-sock-shop-configmap.yaml
+  # Centralised secret for all DB credentials (MongoDB user/password, etc.)
+  - 00-sock-shop-secret.yaml
+  # ResourceQuota prevents the demo from consuming too much cluster capacity
+  - 00-sock-shop-quota.yaml
+
+  # --- carts service (Java Spring Boot + MongoDB) ---
+  - 01-carts-dep.yaml
+  - 02-carts-svc.yaml
+  - 03-carts-db-dep.yaml
+  - 04-carts-db-svc.yaml
+
+  # --- catalogue service (Go + MariaDB) ---
+  - 05-catalogue-dep.yaml
+  - 06-catalogue-svc.yaml
+  - 07-catalogue-db-dep.yaml
+  - 08-catalogue-db-svc.yaml
+
+  # --- front-end service (Node.js UI layer) ---
+  - 09-front-end-dep.yaml
+  - 10-front-end-svc.yaml
+  # Ingress exposes front-end via HTTP(S) hostname (replace host with your domain)
+  - 10-front-end-ingress.yaml
+
+  # --- orders service (Java Spring Boot + MongoDB) ---
+  - 11-orders-dep.yaml
+  - 12-orders-svc.yaml
+  - 13-orders-db-dep.yaml
+  - 14-orders-db-svc.yaml
+
+  # --- payment service (Go, stateless) ---
+  - 15-payment-dep.yaml
+  - 16-payment-svc.yaml
+
+  # --- queue-master service (Java RabbitMQ consumer) ---
+  - 17-queue-master-dep.yaml
+  - 18-queue-master-svc.yaml
+
+  # --- rabbitmq message broker (+ Prometheus exporter sidecar) ---
+  - 19-rabbitmq-dep.yaml
+  - 20-rabbitmq-svc.yaml
+
+  # --- session store (Redis for front-end session cookies) ---
+  - 21-session-db-dep.yaml
+  - 22-session-db-svc.yaml
+
+  # --- shipping service (Java Spring Boot) ---
+  - 23-shipping-dep.yaml
+  - 24-shipping-svc.yaml
+
+  # --- user service (Go + MongoDB) ---
+  - 25-user-dep.yaml
+  - 26-user-svc.yaml
+  - 27-user-db-dep.yaml
+  - 28-user-db-svc.yaml
+
+# ConfigMap generator consumes a plain .env-style file and produces a ConfigMap.
+# Edit config.env to change non-sensitive settings at deploy time.
+configMapGenerator:
+  - name: sock-shop-config
+    namespace: sock-shop
+    envs:
+      - config.env

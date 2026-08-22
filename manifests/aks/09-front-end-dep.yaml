@@ -1,0 +1,99 @@
+# front-end Deployment — Node.js single-page UI for the Sock Shop.
+# Talks to all backend microservices over internal ClusterIP Services and
+# stores session state in Redis (session-db).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: front-end
+  namespace: sock-shop
+  labels:
+    name: front-end
+    app: front-end
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      name: front-end
+  template:
+    metadata:
+      labels:
+        name: front-end
+        app: front-end
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8079"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: front-end
+          image: quay.io/powercloud/sock-shop-front-end:latest
+          imagePullPolicy: IfNotPresent
+          command: [ "/usr/bin/npm" ]
+          args: [ "start" ]
+          ports:
+            - name: http
+              containerPort: 8079
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: sock-shop-config
+          env:
+            # Backend service URLs — all hit ClusterIP Services inside the namespace.
+            - name: SESSION_REDIS_URL
+              value: "redis://$(SESSION_DB_HOST):$(SESSION_DB_PORT)"
+          resources:
+            requests:
+              cpu: 100m
+              memory: 200Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          livenessProbe:
+            httpGet:
+              path: /
+              port: 8079
+            initialDelaySeconds: 30
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 5
+          readinessProbe:
+            httpGet:
+              path: /
+              port: 8079
+            initialDelaySeconds: 15
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          # npm needs a writable cache directory; read-only FS forces us to mount /tmp + cache.
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp-volume
+            - mountPath: /opt/app-root/src/.npm/_cacache
+              name: npm-cache
+      volumes:
+        - name: tmp-volume
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi
+        - name: npm-cache
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi

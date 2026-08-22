@@ -1,0 +1,102 @@
+# catalogue-db Deployment — MariaDB 10.x seed image for the product catalogue.
+# The custom image pre-loads socksdb schema + sample rows. Data is ephemeral
+# (emptyDir Memory) for the demo; replace with PVC for persistence.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalogue-db
+  namespace: sock-shop
+  labels:
+    name: catalogue-db
+    app: catalogue-db
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      name: catalogue-db
+  template:
+    metadata:
+      labels:
+        name: catalogue-db
+        app: catalogue-db
+      annotations:
+        prometheus.io/scrape: "false"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: catalogue-db
+          image: quay.io/powercloud/sock-shop-catalogue-db:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: mysql
+              containerPort: 3306
+              protocol: TCP
+          env:
+            - name: MARIADB_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: mariadb-root-password
+            - name: MARIADB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: mariadb-root-username
+            - name: MARIADB_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: sock-shop-config
+                  key: CATALOGUE_DB_DATABASE
+          resources:
+            requests:
+              cpu: 50m
+              memory: 256Mi
+            limits:
+              cpu: 300m
+              memory: 512Mi
+          livenessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - "mariadb-admin ping -uroot -p${MARIADB_ROOT_PASSWORD} || mysqladmin ping -uroot -p${MARIADB_ROOT_PASSWORD}"
+            initialDelaySeconds: 90
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - bash
+                - -c
+                - "mariadb-admin ping -uroot -p${MARIADB_ROOT_PASSWORD} || mysqladmin ping -uroot -p${MARIADB_ROOT_PASSWORD}"
+            initialDelaySeconds: 45
+            periodSeconds: 10
+            timeoutSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            privileged: false
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: catalogue-data
+              mountPath: /var/lib/mysql
+            - name: tmp-volume
+              mountPath: /tmp
+      volumes:
+        - name: catalogue-data
+          emptyDir:
+            medium: Memory
+            sizeLimit: 512Mi
+        - name: tmp-volume
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi

@@ -1,0 +1,18 @@
+# user-db Service — ClusterIP 27017 -> container 27017.
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-db
+  namespace: sock-shop
+  labels:
+    name: user-db
+    app: user-db
+spec:
+  type: ClusterIP
+  ports:
+    - name: mongo
+      port: 27017
+      targetPort: 27017
+      protocol: TCP
+  selector:
+    name: user-db

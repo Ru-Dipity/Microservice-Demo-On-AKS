@@ -1,0 +1,18 @@
+# Manual ConfigMap carrying additional structured config beyond the flat env-file.
+# In this demo we ship it empty on purpose — real values are injected by the
+# kustomize configMapGenerator from config.env. Keeping an explicit YAML ConfigMap
+# here (1) documents intent, and (2) gives a placeholder for multi-key configs
+# such as JSON files, nginx snippets, etc. that you may add later.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sock-shop-config-extra
+  namespace: sock-shop
+  labels:
+    app: sock-shop
+data:
+  # Example of a multi-line config that would be mounted as a file, not env vars.
+  # To actually use it, add a volumeMount subPath in the consuming Deployment.
+  # logback-spring.xml: |
+  #   <configuration>...</configuration>
+  placeholder: "true"

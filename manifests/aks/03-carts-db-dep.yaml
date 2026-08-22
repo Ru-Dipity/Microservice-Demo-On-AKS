@@ -1,0 +1,114 @@
+# carts-db Deployment — MongoDB 4 backing store for the carts service.
+# Uses an ephemeral in-memory emptyDir for data (demo-only, NOT persistent).
+# For durable data on AKS, replace the emptyDir with a PVC using AKS
+# managed-csi storage class (Azure Disk).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carts-db
+  namespace: sock-shop
+  labels:
+    name: carts-db
+    app: carts-db
+spec:
+  replicas: 1
+  # Single DB replica — Recreate strategy to avoid split-brain during rollouts.
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      name: carts-db
+  template:
+    metadata:
+      labels:
+        name: carts-db
+        app: carts-db
+      annotations:
+        prometheus.io/scrape: "false"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: carts-db
+          image: mongo:4
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: mongo
+              containerPort: 27017
+              protocol: TCP
+          # Startup scripts create the user / DB via MONGODB_* env vars on first boot.
+          envFrom:
+            - configMapRef:
+                name: sock-shop-config
+          env:
+            - name: MONGODB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: mongodb-username
+            - name: MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: mongodb-password
+            - name: MONGODB_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: sock-shop-config
+                  key: CARTS_DB_DATABASE
+            - name: MONGODB_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: mongodb-password
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 384Mi
+          livenessProbe:
+            exec:
+              command:
+                - mongo
+                - --eval
+                - "db.adminCommand('ping')"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - mongo
+                - --eval
+                - "db.adminCommand('ping')"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: carts-db-data
+              mountPath: /data/db
+            - name: tmp-volume
+              mountPath: /tmp
+      volumes:
+        # Demo-only: data is lost on Pod delete. Replace with a PVC for persistence.
+        - name: carts-db-data
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+        - name: tmp-volume
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi

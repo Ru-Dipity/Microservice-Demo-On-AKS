@@ -1,0 +1,140 @@
+# carts Deployment — Java Spring Boot microservice for shopping cart CRUD.
+# Uses MongoDB (carts-db) as backing store. Communicates over HTTP on port 8080.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carts
+  namespace: sock-shop
+  labels:
+    name: carts
+    app: carts
+spec:
+  replicas: 1
+  # Progressive rollout: max 1 extra Pod during upgrade, zero downtime.
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      name: carts
+  template:
+    metadata:
+      labels:
+        name: carts
+        app: carts
+      # Prometheus annotations: tell Prometheus to scrape this Pod's
+      # Spring Boot Actuator /actuator/prometheus endpoint on port 8080.
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/actuator/prometheus"
+    spec:
+      # PSA restricted compliance: run as unprivileged, arbitrary non-root UID.
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: carts
+          # Replace with your ACR image: <acr-name>.azurecr.io/sock-shop/carts:latest
+          image: quay.io/powercloud/sock-shop-carts:latest
+          # IfNotPresent avoids re-pulling on every Pod restart (AKS image cache).
+          imagePullPolicy: IfNotPresent
+          command: [ "/usr/bin/java" ]
+          args:
+            - "-cp"
+            - "/opt/app.jar"
+            - "-Dloader.path=/opt/lib"
+            - "org.springframework.boot.loader.PropertiesLauncher"
+            - "--server.port=8080"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          # Resource requests/limits tuned for a small demo footprint.
+          # Raise limits if you see OOMKills / CPU throttling under load.
+          resources:
+            requests:
+              cpu: 100m
+              memory: 256Mi
+            limits:
+              cpu: 500m
+              memory: 512Mi
+          # Inject ConfigMap values (log level, JAVA_OPTS) as env vars.
+          envFrom:
+            - configMapRef:
+                name: sock-shop-config
+          # Secrets (MongoDB credentials) injected individually so we can
+          # remap secret keys into Spring Boot env var names.
+          env:
+            - name: SPRING_DATA_MONGODB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: sock-shop-config
+                  key: CARTS_DB_HOST
+            - name: SPRING_DATA_MONGODB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: sock-shop-config
+                  key: CARTS_DB_PORT
+            - name: SPRING_DATA_MONGODB_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: sock-shop-config
+                  key: CARTS_DB_DATABASE
+            - name: SPRING_DATA_MONGODB_USERNAME
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: mongodb-username
+            - name: SPRING_DATA_MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: mongodb-password
+            # JAVA_OPTS overrides default JVM flags (from ConfigMap).
+            - name: JAVA_OPTS
+              valueFrom:
+                configMapKeyRef:
+                  name: sock-shop-config
+                  key: JAVA_OPTS
+          # Liveness: Pod is restarted if this fails (process stuck).
+          livenessProbe:
+            httpGet:
+              path: /actuator/health/liveness
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          # Readiness: Pod is removed from Service endpoints if unhealthy.
+          readinessProbe:
+            httpGet:
+              path: /actuator/health/readiness
+              port: 8080
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          # Restricted PSA: drop all Linux capabilities, read-only root FS.
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          # Read-only root FS needs writable /tmp for JVM temp files.
+          volumeMounts:
+            - name: tmp-volume
+              mountPath: /tmp
+      # Ephemeral emptyDir for /tmp. Does NOT survive Pod restarts (intended).
+      volumes:
+        - name: tmp-volume
+          emptyDir:
+            medium: Memory
+            sizeLimit: 128Mi

@@ -1,0 +1,110 @@
+# user-db Deployment — custom MongoDB image pre-seeded with user accounts.
+# Image entrypoint creates the `socksdb` database + user account on first boot
+# (see MONGODB_* env vars).
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-db
+  namespace: sock-shop
+  labels:
+    name: user-db
+    app: user-db
+spec:
+  replicas: 1
+  strategy:
+    type: Recreate
+  selector:
+    matchLabels:
+      name: user-db
+  template:
+    metadata:
+      labels:
+        name: user-db
+        app: user-db
+      annotations:
+        prometheus.io/scrape: "false"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 999
+        runAsGroup: 999
+        fsGroup: 999
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: user-db
+          image: quay.io/powercloud/sock-shop-user-db:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - name: mongo
+              containerPort: 27017
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: sock-shop-config
+          env:
+            - name: MONGODB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: userdb-username
+            - name: MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: userdb-password
+            - name: MONGODB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: userdb-database
+            - name: MONGODB_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: userdb-password
+          resources:
+            requests:
+              cpu: 50m
+              memory: 128Mi
+            limits:
+              cpu: 300m
+              memory: 384Mi
+          livenessProbe:
+            exec:
+              command:
+                - mongo
+                - --eval
+                - "db.adminCommand('ping')"
+            initialDelaySeconds: 60
+            periodSeconds: 30
+            timeoutSeconds: 5
+          readinessProbe:
+            exec:
+              command:
+                - mongo
+                - --eval
+                - "db.adminCommand('ping')"
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            timeoutSeconds: 5
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL
+          volumeMounts:
+            - name: user-db-data
+              mountPath: /data/db-users
+            - name: tmp-volume
+              mountPath: /tmp
+      volumes:
+        - name: user-db-data
+          emptyDir:
+            medium: Memory
+            sizeLimit: 256Mi
+        - name: tmp-volume
+          emptyDir:
+            medium: Memory
+            sizeLimit: 64Mi

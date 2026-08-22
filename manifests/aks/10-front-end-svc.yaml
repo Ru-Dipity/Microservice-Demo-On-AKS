@@ -1,0 +1,22 @@
+# front-end Service — ClusterIP. The Ingress (10-front-end-ingress.yaml)
+# terminates external traffic and forwards here on port 80 → 8079.
+apiVersion: v1
+kind: Service
+metadata:
+  name: front-end
+  namespace: sock-shop
+  labels:
+    name: front-end
+    app: front-end
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8079"
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 80
+      targetPort: 8079
+      protocol: TCP
+  selector:
+    name: front-end

@@ -1,0 +1,62 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-db
+  labels:
+    name: user-db
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      name: user-db
+  template:
+    metadata:
+      labels:
+        name: user-db
+    spec:
+      containers:
+        - name: user-db
+          image: centos/mongodb-34-centos7
+          imagePullPolicy: IfNotPresent
+          env:
+            - name: MONGODB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-creds
+                  key: mongodb_user
+            - name: MONGODB_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-creds
+                  key: mongodb_password
+            - name: MONGODB_DATABASE
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-creds
+                  key: user_mongodb_database
+            - name: MONGODB_ADMIN_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: mongodb-creds
+                  key: mongodb_admin_password
+          ports:
+            - name: mongo
+              containerPort: 27017
+          securityContext:
+            runAsNonRoot: true
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - all
+          volumeMounts:
+            - mountPath: /tmp
+              name: users-db-temp-vol
+            - mountPath: /var/lib/mongodb/data
+              name: users-db-vol
+      volumes:
+        - name: users-db-temp-vol
+          emptyDir:
+            medium: Memory
+        - name: users-db-vol
+          emptyDir:
+            medium: Memory

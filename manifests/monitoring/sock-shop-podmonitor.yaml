@@ -1,0 +1,30 @@
+# ----------------------------------------------------------------------------
+# PodMonitor — scrapes any Pod in sock-shop namespace that bears the
+# prometheus.io/scrape: "true" annotation, regardless of whether it has a
+# Service. This catches ephemeral / headless workloads the ServiceMonitor
+# might miss.
+# ----------------------------------------------------------------------------
+apiVersion: monitoring.coreos.com/v1
+kind: PodMonitor
+metadata:
+  name: sock-shop-pods
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+    app: sock-shop
+spec:
+  namespaceSelector:
+    matchNames:
+      - sock-shop
+  selector:
+    matchLabels:
+      app.kubernetes.io/part-of: sock-shop
+  podMetricsEndpoints:
+    - port: http
+      interval: 30s
+      path: /metrics
+      scrapeTimeout: 10s
+    - port: exporter
+      interval: 30s
+      path: /metrics
+      scrapeTimeout: 10s

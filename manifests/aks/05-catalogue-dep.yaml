@@ -1,0 +1,108 @@
+# catalogue Deployment — Go microservice serving the product catalogue.
+# Connects to MariaDB (catalogue-db) over port 3306. Exposes HTTP/8080.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalogue
+  namespace: sock-shop
+  labels:
+    name: catalogue
+    app: catalogue
+spec:
+  replicas: 1
+  strategy:
+    rollingUpdate:
+      maxUnavailable: 0
+      maxSurge: 1
+    type: RollingUpdate
+  selector:
+    matchLabels:
+      name: catalogue
+  template:
+    metadata:
+      labels:
+        name: catalogue
+        app: catalogue
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8080"
+        prometheus.io/path: "/metrics"
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        fsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: catalogue
+          image: quay.io/powercloud/sock-shop-catalogue:latest
+          imagePullPolicy: IfNotPresent
+          command: [ "/opt/app" ]
+          args:
+            - "-port=8080"
+            # DSN pieces come from ConfigMap + Secret; assembled as a single arg.
+            - "-DSN=$(CATALOGUE_DB_USER):$(CATALOGUE_DB_PASS)@tcp($(CATALOGUE_DB_HOST):$(CATALOGUE_DB_PORT))/$(CATALOGUE_DB_DATABASE)"
+          ports:
+            - name: http
+              containerPort: 8080
+              protocol: TCP
+          envFrom:
+            - configMapRef:
+                name: sock-shop-config
+          env:
+            - name: CATALOGUE_DB_USER
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: mariadb-root-username
+            - name: CATALOGUE_DB_PASS
+              valueFrom:
+                secretKeyRef:
+                  name: sock-shop-creds
+                  key: mariadb-root-password
+            - name: CATALOGUE_DB_HOST
+              valueFrom:
+                configMapKeyRef:
+                  name: sock-shop-config
+                  key: CATALOGUE_DB_HOST
+            - name: CATALOGUE_DB_PORT
+              valueFrom:
+                configMapKeyRef:
+                  name: sock-shop-config
+                  key: CATALOGUE_DB_PORT
+            - name: CATALOGUE_DB_DATABASE
+              valueFrom:
+                configMapKeyRef:
+                  name: sock-shop-config
+                  key: CATALOGUE_DB_DATABASE
+          resources:
+            requests:
+              cpu: 50m
+              memory: 64Mi
+            limits:
+              cpu: 200m
+              memory: 256Mi
+          livenessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 60
+            periodSeconds: 15
+            timeoutSeconds: 5
+            failureThreshold: 6
+          readinessProbe:
+            httpGet:
+              path: /health
+              port: 8080
+            initialDelaySeconds: 20
+            periodSeconds: 10
+            timeoutSeconds: 3
+            failureThreshold: 3
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: true
+            capabilities:
+              drop:
+                - ALL

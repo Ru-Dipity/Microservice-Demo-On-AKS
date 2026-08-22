@@ -1,0 +1,122 @@
+# ----------------------------------------------------------------------------
+# PrometheusRule — SLO + alerting rules for the Sock Shop demo.
+#
+# These rules are consumed by the kube-prometheus-stack Prometheus CR and
+# evaluate continuously in Prometheus. Firing alerts appear in Grafana /
+# Alertmanager (if enabled).
+# ----------------------------------------------------------------------------
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: sock-shop-rules
+  namespace: monitoring
+  labels:
+    release: kube-prometheus-stack
+    app: sock-shop
+spec:
+  groups:
+    # ----------------------------------------------------------------------
+    # Application availability — high-level SLO
+    # ----------------------------------------------------------------------
+    - name: sock-shop.availability
+      rules:
+        - alert: SockShopFrontendDown
+          expr: |
+            kube_deployment_status_replicas_available{namespace="sock-shop", deployment="front-end"} < 1
+          for: 2m
+          labels:
+            severity: critical
+            team: sock-shop
+          annotations:
+            summary: "Sock Shop front-end has no available replicas"
+            runbook_url: "https://your-runbook-url/SockShopFrontendDown"
+            description: >
+              front-end Deployment in namespace sock-shop reports 0 Ready
+              replicas for 2 minutes. Users will see 503/502 from Ingress.
+
+        - alert: SockShopHigh5xxRate
+          expr: |
+            sum by (ingress) (rate(nginx_ingress_controller_requests{
+              namespace="sock-shop", status=~"5.."
+            }[5m]))
+            /
+            sum by (ingress) (rate(nginx_ingress_controller_requests{
+              namespace="sock-shop"
+            }[5m]))
+            > 0.05
+          for: 5m
+          labels:
+            severity: warning
+            team: sock-shop
+          annotations:
+            summary: "Sock Shop 5xx error rate > 5%"
+            description: >
+              Ingress reports more than 5% of requests returning 5xx status
+              over the last 5 minutes.
+
+    # ----------------------------------------------------------------------
+    # Resource saturation — resource usage alarms
+    # ----------------------------------------------------------------------
+    - name: sock-shop.resources
+      rules:
+        - alert: SockShopHighContainerCPU
+          expr: |
+            avg by (pod, container, namespace) (
+              rate(container_cpu_usage_seconds_total{namespace="sock-shop"}[5m])
+              / on(pod, container, namespace) group_left
+              kube_pod_container_resource_limits{resource="cpu", unit="core", namespace="sock-shop"}
+            ) > 0.85
+          for: 10m
+          labels:
+            severity: warning
+            team: sock-shop
+          annotations:
+            summary: "Container {{ $labels.pod }}/{{ $labels.container }} CPU > 85% limit"
+            description: >
+              Container has been consuming more than 85% of its CPU limit for
+              10 minutes. Consider raising limits or load testing.
+
+        - alert: SockShopContainerMemoryNearLimit
+          expr: |
+            (
+              container_memory_working_set_bytes{namespace="sock-shop", image!=""}
+              / on(pod, container, namespace) group_left
+              kube_pod_container_resource_limits{resource="memory", unit="byte", namespace="sock-shop"}
+            ) > 0.9
+          for: 5m
+          labels:
+            severity: critical
+            team: sock-shop
+          annotations:
+            summary: "Container {{ $labels.pod }} memory at > 90% limit"
+            description: >
+              OOMKill is likely imminent. Raise limits before the workload
+              restarts.
+
+    # ----------------------------------------------------------------------
+    # Middleware health — RabbitMQ, Redis, databases
+    # ----------------------------------------------------------------------
+    - name: sock-shop.middleware
+      rules:
+        - alert: SockShopRabbitMQDown
+          expr: rabbitmq_up == 0 or absent(rabbitmq_up)
+          for: 2m
+          labels:
+            severity: critical
+            team: sock-shop
+          annotations:
+            summary: "RabbitMQ exporter reports broker unreachable"
+            description: "Shipping/order dispatch will stall until RabbitMQ recovers."
+
+        - alert: SockShopMongoDBConnectionsHigh
+          expr: |
+            sum by (exported_instance) (rate(mongodb_connections{namespace="sock-shop"}[5m]))
+            /
+            sum by (exported_instance) (rate(mongodb_connections_limit{namespace="sock-shop"}[5m]))
+            > 0.8
+          for: 5m
+          labels:
+            severity: warning
+            team: sock-shop
+          annotations:
+            summary: "MongoDB {{ $labels.exported_instance }} connection pool > 80%"
