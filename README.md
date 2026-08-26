@@ -57,8 +57,7 @@ sock-shop-on-aks/
 │   ├── versions.tf
 │   └── terraform.tfvars.example
 ├── .github/workflows/
-│   ├── deploy.yml                 # Application deployment pipeline (Lint + Deploy)
-│   └── terraform.yml              # Infrastructure pipeline (Plan + Apply)
+│   └── ci-cd.yml                  # Unified CI/CD pipeline (Terraform + Lint + Deploy)
 └── all-in-one-deploy/             # (Retained) original loose YAML manifests, for reference or removal
 ```
 
@@ -240,12 +239,15 @@ Store the returned JSON in the `AZURE_CREDENTIALS` secret.
 
 #### Pipeline Overview
 
-The two workflows are orchestrated so that infrastructure is provisioned **before** the application is deployed:
+A single **[`ci-cd.yml`](.github/workflows/ci-cd.yml)** workflow orchestrates the full pipeline, ensuring infrastructure is provisioned **before** the application is deployed:
 
-1. **[`terraform.yml`](.github/workflows/terraform.yml):** triggered on push to `terraform/` (or manually) → `terraform fmt/validate/plan/apply` to provision the Resource Group, AKS cluster, and NGINX Ingress Controller.
-2. **[`deploy.yml`](.github/workflows/deploy.yml):** triggered on push to `main` (or manually), **and automatically after `terraform.yml` completes successfully** (via `workflow_run`) → `helm lint` + `helm template` validation → `az login` → `helm upgrade` to deploy the Sock Shop and monitoring stacks.
+1. **`terraform` job:** `terraform init` → `fmt` → `validate` → `plan` → `apply` to provision the Resource Group, AKS cluster, and NGINX Ingress Controller.
+2. **`lint` job:** `helm lint` + `helm template` render validation for the sock-shop and monitoring charts (runs in parallel with `terraform`).
+3. **`deploy` job** (`needs: [terraform, lint]`): runs only after both infrastructure and chart validation succeed → `az login` → `helm upgrade` to deploy the monitoring and sock-shop stacks to AKS.
 
-> **Note:** When `deploy.yml` is triggered by `workflow_run`, the deployment environment defaults to `dev` (the `workflow_dispatch` `environment` input is not available in that trigger). Use the manual trigger to select `prod`.
+**Triggers:**
+- **Push to `main`:** any change under `terraform/`, `helm-chart/`, or `.github/workflows/` triggers the pipeline.
+- **Manual (`workflow_dispatch`):** select the deployment environment (`dev` / `prod`); defaults to `dev` on push triggers.
 
 ---
 
