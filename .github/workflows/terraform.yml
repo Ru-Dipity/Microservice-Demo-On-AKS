@@ -1,7 +1,7 @@
 # =============================================================================
-# Terraform 基础设施流水线
-# 触发：push 到 terraform/ 目录 / 手动触发
-# 流程：fmt 校验 -> validate -> plan -> apply
+# Terraform infrastructure pipeline
+# Trigger: push to terraform/ directory / manual trigger
+# Flow: fmt validation -> validate -> plan -> apply
 # =============================================================================
 name: Terraform Infrastructure
 
@@ -15,7 +15,7 @@ on:
 
 env:
   TF_IN_AUTOMATION: true
-  # 从已有的 AZURE_CREDENTIALS JSON 中动态解析字段
+  # Dynamically parse fields from the existing AZURE_CREDENTIALS JSON
   ARM_CLIENT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
   ARM_CLIENT_SECRET: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
   ARM_TENANT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).tenantId }}

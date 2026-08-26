@@ -1,7 +1,7 @@
 # =============================================================================
-# Sock Shop 应用部署流水线
-# 触发：push 到 main / 手动触发
-# 流程：Helm Lint 校验 -> Helm Template 渲染校验 -> 部署到 AKS
+# Sock Shop application deployment pipeline
+# Trigger: push to main / manual trigger
+# Flow: Helm Lint validation -> Helm Template render validation -> deploy to AKS
 # =============================================================================
 name: Deploy Sock Shop to AKS
 
@@ -14,7 +14,7 @@ on:
   workflow_dispatch:
     inputs:
       environment:
-        description: '部署环境 (dev / prod)'
+        description: 'Deployment environment (dev / prod)'
         required: true
         default: 'dev'
         type: choice
@@ -24,7 +24,7 @@ on:
 
 jobs:
   lint:
-    name: Helm Lint & Template 校验
+    name: Helm Lint & Template Validation
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -41,17 +41,17 @@ jobs:
       - name: Helm Lint - monitoring
         run: helm lint helm-chart/monitoring
 
-      - name: Helm Template 渲染校验 (dev)
+      - name: Helm Template Render Validation (dev)
         run: |
           helm template sock-shop helm-chart/sock-shop -f helm-chart/sock-shop/values-dev.yaml > /dev/null
           helm template sock-shop helm-chart/sock-shop -f helm-chart/sock-shop/values-prod.yaml > /dev/null
           helm template monitoring helm-chart/monitoring -f helm-chart/monitoring/values.yaml > /dev/null
-          echo "sock-shop dev 渲染成功"
-          echo "sock-shop prod 渲染成功"
-          echo "monitoring dev 渲染成功"
+          echo "sock-shop dev rendered successfully"
+          echo "sock-shop prod rendered successfully"
+          echo "monitoring rendered successfully"
 
   deploy:
-    name: 部署到 AKS
+    name: Deploy to AKS
     runs-on: ubuntu-latest
     needs: lint
     env:
@@ -72,7 +72,7 @@ jobs:
         with:
           kubelogin-version: 'v0.1.3'
 
-      - name: 获取 AKS 凭据
+      - name: Get AKS credentials
         uses: azure/aks-set-context@v3
         with:
           resource-group: ${{ env.RESOURCE_GROUP }}
@@ -85,7 +85,7 @@ jobs:
         with:
           version: v3.14.0
 
-      - name: 部署 Monitoring 基础监控
+      - name: Deploy Monitoring stack
         run: |
           helm upgrade --install monitoring helm-chart/monitoring \
             -f helm-chart/monitoring/values.yaml \
@@ -93,15 +93,15 @@ jobs:
             --create-namespace \
             --wait --timeout 5m
 
-      - name: 部署 Sock Shop 微服务
+      - name: Deploy Sock Shop microservices
         run: |
           helm upgrade --install sock-shop helm-chart/sock-shop \
             -f helm-chart/sock-shop/values-${{ env.DEPLOY_ENV }}.yaml \
             --namespace sock-shop-${{ env.DEPLOY_ENV }} \
             --create-namespace \
-            --wait --timeout 5m
+            --wait --timeout 10m
 
-      - name: 验证 Pod 状态
+      - name: Verify Pod status
         run: |
           echo "=== Monitoring Pods ==="
           kubectl get pods -n monitoring

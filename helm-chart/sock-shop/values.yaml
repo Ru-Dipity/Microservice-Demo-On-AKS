@@ -1,26 +1,26 @@
 # =============================================================================
-# Sock Shop Helm Chart — 默认 values（作为 dev 基准）
-# 通过 values-dev.yaml / values-prod.yaml 覆盖环境差异
+# Sock Shop Helm Chart — default values (used as the dev baseline)
+# Environment differences are overridden via values-dev.yaml / values-prod.yaml
 # =============================================================================
 
-# 命名空间（dev/prod 可通过 values 覆盖为 sock-shop-dev / sock-shop-prod）
+# Namespace (dev/prod can override this to sock-shop-dev / sock-shop-prod via values)
 namespace: sock-shop
 
-# 全局镜像拉取策略
+# Global image pull policy
 imagePullPolicy: IfNotPresent
 
-# 节点选择器（Linux 节点）
+# Node selector (Linux nodes)
 nodeSelector:
   kubernetes.io/os: linux
 
 # -----------------------------------------------------------------------------
-# Ingress 配置
-# host 留空，用户后续自行填写（如 sockshop.lukas.cloud-ip.cc）
+# Ingress configuration
+# host is left empty; fill it in later (e.g. sockshop.lukas.cloud-ip.cc)
 # -----------------------------------------------------------------------------
 ingress:
   enabled: true
   className: nginx
-  host: ""            # <-- 留空，用户自行填写
+  host: ""            # <-- leave empty; fill in your own value
   tls:
     enabled: false
     secretName: ""
@@ -29,11 +29,11 @@ ingress:
 # Secrets
 # -----------------------------------------------------------------------------
 secrets:
-  catalogueDbPassword: admin   # catalogue-db MySQL root 密码
+  catalogueDbPassword: admin   # catalogue-db MySQL root password
 
 # -----------------------------------------------------------------------------
-# 服务定义
-# 每个服务包含：image / replicas / resources / env / probes / ports / scrape
+# Service definitions
+# Each service includes: image / replicas / resources / env / probes / ports / scrape
 # -----------------------------------------------------------------------------
 services:
   carts:
@@ -47,7 +47,7 @@ services:
       SPRING_DATA_MONGODB_PORT: "27017"
       SPRING_DATA_MONGODB_DATABASE: data
     resources:
-      requests: { cpu: 100m, memory: 200Mi }
+      requests: { cpu: 50m, memory: 200Mi }
       limits:   { cpu: 300m, memory: 500Mi }
     securityContext:
       runAsNonRoot: true
@@ -79,7 +79,7 @@ services:
     command: ["/app"]
     args: ["-port=80"]
     resources:
-      requests: { cpu: 100m, memory: 100Mi }
+      requests: { cpu: 50m, memory: 100Mi }
       limits:   { cpu: 200m, memory: 200Mi }
     securityContext:
       runAsNonRoot: true
@@ -118,7 +118,7 @@ services:
     env:
       SESSION_REDIS: "true"
     resources:
-      requests: { cpu: 100m, memory: 300Mi }
+      requests: { cpu: 50m, memory: 300Mi }
       limits:   { cpu: 300m, memory: 1000Mi }
     securityContext:
       runAsNonRoot: true
@@ -147,7 +147,7 @@ services:
       SPRING_DATA_MONGODB_PORT: "27017"
       SPRING_DATA_MONGODB_DATABASE: data
     resources:
-      requests: { cpu: 100m, memory: 300Mi }
+      requests: { cpu: 50m, memory: 300Mi }
       limits:   { cpu: 500m, memory: 500Mi }
     securityContext:
       runAsNonRoot: true
@@ -177,7 +177,7 @@ services:
     port: 80
     scrape: "true"
     resources:
-      requests: { cpu: 99m, memory: 100Mi }
+      requests: { cpu: 50m, memory: 100Mi }
       limits:   { cpu: 200m, memory: 200Mi }
     securityContext:
       runAsNonRoot: true
@@ -204,7 +204,7 @@ services:
     env:
       JAVA_OPTS: "-Xms64m -Xmx128m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom -Dspring.zipkin.enabled=false"
     resources:
-      requests: { cpu: 100m, memory: 300Mi }
+      requests: { cpu: 50m, memory: 300Mi }
       limits:   { cpu: 300m, memory: 500Mi }
 
   rabbitmq:
@@ -251,7 +251,7 @@ services:
       ZIPKIN: zipkin.jaeger.svc.cluster.local
       JAVA_OPTS: "-Xms64m -Xmx128m -XX:+UseG1GC -Djava.security.egd=file:/dev/urandom -Dspring.zipkin.enabled=false"
     resources:
-      requests: { cpu: 100m, memory: 300Mi }
+      requests: { cpu: 50m, memory: 300Mi }
       limits:   { cpu: 300m, memory: 500Mi }
     securityContext:
       runAsNonRoot: true
@@ -269,7 +269,7 @@ services:
     env:
       mongo: user-db:27017
     resources:
-      requests: { cpu: 100m, memory: 100Mi }
+      requests: { cpu: 50m, memory: 100Mi }
       limits:   { cpu: 300m, memory: 200Mi }
     securityContext:
       runAsNonRoot: true

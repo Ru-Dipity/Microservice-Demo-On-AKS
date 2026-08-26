@@ -16,7 +16,7 @@ terraform {
     }
   }
 
-  # 可选：使用 Azure Storage 保存 state（取消注释并配置 backend）
+  # Optional: use Azure Storage to persist state (uncomment and configure the backend)
   # backend "azurerm" {
   #   resource_group_name  = "rg-terraform-state"
   #   storage_account_name = "sasockshopstate"

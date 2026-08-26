@@ -8,7 +8,7 @@ resource "azurerm_resource_group" "main" {
 }
 
 # =============================================================================
-# 2. AKS 集群
+# 2. AKS cluster
 # =============================================================================
 resource "azurerm_kubernetes_cluster" "main" {
   name                = var.cluster_name
@@ -37,12 +37,12 @@ resource "azurerm_kubernetes_cluster" "main" {
     network_policy = "azure"
   }
 
-  # 可选：启用 RBAC（默认开启）
+  # Optional: enable RBAC (enabled by default)
   role_based_access_control_enabled = true
 }
 
 # =============================================================================
-# 3. 获取 kubeconfig 供 Helm provider 使用
+# 3. Retrieve kubeconfig for use by the Helm provider
 # =============================================================================
 data "azurerm_kubernetes_cluster" "main" {
   name                = azurerm_kubernetes_cluster.main.name
@@ -66,7 +66,7 @@ provider "helm" {
 }
 
 # =============================================================================
-# 4. NGINX Ingress Controller（通过 Helm 安装）
+# 4. NGINX Ingress Controller (installed via Helm)
 # =============================================================================
 resource "helm_release" "ingress_nginx" {
   count = var.ingress_controller_enabled ? 1 : 0

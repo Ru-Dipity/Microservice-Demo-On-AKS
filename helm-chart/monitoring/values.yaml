@@ -1,12 +1,12 @@
 # =============================================================================
-# Monitoring Helm Chart — 统一监控栈配置
+# Monitoring Helm Chart — unified monitoring stack configuration
 # =============================================================================
 
-# 镜像拉取策略
+# Image pull policy
 imagePullPolicy: IfNotPresent
 
 # -----------------------------------------------------------------------------
-# Ingress 配置
+# Ingress configuration
 # -----------------------------------------------------------------------------
 ingress:
   enabled: true

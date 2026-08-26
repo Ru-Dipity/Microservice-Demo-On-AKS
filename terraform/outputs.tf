@@ -1,25 +1,25 @@
 output "resource_group_name" {
-  description = "Resource Group 名称"
+  description = "Resource Group name"
   value       = azurerm_resource_group.main.name
 }
 
 output "cluster_name" {
-  description = "AKS 集群名称"
+  description = "AKS cluster name"
   value       = azurerm_kubernetes_cluster.main.name
 }
 
 output "cluster_fqdn" {
-  description = "AKS 集群 FQDN"
+  description = "AKS cluster FQDN"
   value       = azurerm_kubernetes_cluster.main.fqdn
 }
 
 output "kube_config_raw" {
-  description = "AKS kubeconfig（用于 CI/CD 获取集群凭据）"
+  description = "AKS kubeconfig (used by CI/CD to obtain cluster credentials)"
   value       = azurerm_kubernetes_cluster.main.kube_config_raw
   sensitive   = true
 }
 
 output "ingress_controller_enabled" {
-  description = "NGINX Ingress Controller 是否已启用"
+  description = "Whether the NGINX Ingress Controller is enabled"
   value       = var.ingress_controller_enabled
 }

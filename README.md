@@ -1,88 +1,124 @@
 # Sock Shop on AKS
 
-Sock Shop Demo 在 Azure Kubernetes Service (AKS) 上的现代化交付方案，包含 **Helm Chart 封装**、**Terraform IaC** 与 **GitHub Actions CI/CD**。
+A modern delivery solution for the [Sock Shop](https://github.com/microservices-demo/microservices-demo) demo application on **Azure Kubernetes Service (AKS)**, featuring **Helm Chart packaging**, **Terraform IaC**, and **GitHub Actions CI/CD**.
 
-## 目录结构
+This repository provides two deployment paths:
+
+- **Method 1 — Local / All-in-One Deployment (Quickstart):** apply raw Kubernetes manifests or local Helm commands for fast local testing.
+- **Method 2 — Production-Grade GitOps / CI/CD Deployment (Advanced):** provision AKS with Terraform, manage the application and monitoring lifecycle with Helm Charts (multi-environment values), and automate everything with GitHub Actions.
+
+---
+
+## Table of Contents
+
+- [Directory Structure](#directory-structure)
+- [Prerequisites](#prerequisites)
+- [Method 1: Local / All-in-One Deployment (Quickstart)](#method-1-local--all-in-one-deployment-quickstart)
+  - [Option A: Raw Kubernetes Manifests](#option-a-raw-kubernetes-manifests)
+  - [Option B: Local Helm Deployment](#option-b-local-helm-deployment)
+- [Method 2: Production-Grade GitOps / CI/CD Deployment (Advanced)](#method-2-production-grade-gitops--cicd-deployment-advanced)
+  - [Step 1: Provision Infrastructure with Terraform](#step-1-provision-infrastructure-with-terraform)
+  - [Step 2: Deploy with Helm Charts](#step-2-deploy-with-helm-charts)
+  - [Step 3: Automate with GitHub Actions](#step-3-automate-with-github-actions)
+- [Demo & Verification Commands](#demo--verification-commands)
+- [Cleanup](#cleanup)
+- [Troubleshooting](#troubleshooting)
+
+---
+
+## Directory Structure
 
 ```
 sock-shop-on-aks/
 ├── helm-chart/
-│   ├── sock-shop/                 # Sock Shop 应用 Chart（14 个服务 + Secret + Ingress）
+│   ├── sock-shop/                 # Sock Shop application chart (14 services + Secret + Ingress)
 │   │   ├── Chart.yaml
-│   │   ├── values.yaml            # 默认值（dev 基准）
-│   │   ├── values-dev.yaml        # dev 环境覆盖
-│   │   ├── values-prod.yaml       # prod 环境覆盖
+│   │   ├── values.yaml            # Default values (dev baseline)
+│   │   ├── values-dev.yaml        # dev environment overrides
+│   │   ├── values-prod.yaml       # prod environment overrides
 │   │   └── templates/
 │   │       ├── _helpers.tpl
-│   │       ├── namespace.yaml
 │   │       ├── secret.yaml
 │   │       ├── ingress.yaml
-│   │       └── services/          # 每个服务一个模板（Deployment + Service）
-│   └── monitoring/                # 监控 Chart（Prometheus + Grafana + Node Exporter）
+│   │       └── services/          # One template per service (Deployment + Service)
+│   └── monitoring/                # Monitoring chart (Prometheus + Grafana + Node Exporter)
 │       ├── Chart.yaml
 │       ├── values.yaml
-│       ├── values-dev.yaml
-│       ├── values-prod.yaml
 │       └── templates/
-│           ├── namespace.yaml
+│           ├── _helpers.tpl
 │           ├── ingress.yaml
 │           ├── prometheus/        # RBAC + ConfigMap + Deployment + Service
 │           ├── grafana/           # ConfigMap + Deployment + Service
 │           └── node-exporter/     # DaemonSet + Service
-├── terraform/                      # IaC：RG + AKS 集群 + NGINX Ingress Controller
+├── terraform/                      # IaC: Resource Group + AKS cluster + NGINX Ingress Controller
 │   ├── main.tf
 │   ├── variables.tf
 │   ├── outputs.tf
 │   ├── versions.tf
 │   └── terraform.tfvars.example
 ├── .github/workflows/
-│   ├── deploy.yml                 # 应用部署流水线（Lint + 部署）
-│   └── terraform.yml              # 基础设施流水线（Plan + Apply）
-└── all-in-one-deploy/                 # （保留）原始散落 YAML，可参考或删除
+│   ├── deploy.yml                 # Application deployment pipeline (Lint + Deploy)
+│   └── terraform.yml              # Infrastructure pipeline (Plan + Apply)
+└── all-in-one-deploy/             # (Retained) original loose YAML manifests, for reference or removal
 ```
 
-## 前置要求
+> **Note:** The `monitoring` chart currently ships a single `values.yaml`. The `sock-shop` chart ships `values.yaml`, `values-dev.yaml`, and `values-prod.yaml` for multi-environment overrides.
 
-| 工具       | 版本   | 验证命令                      |
-|------------|--------|-------------------------------|
-| Azure CLI  | ≥ 2.50 | `az --version`                |
-| kubectl    | ≥ 1.28 | `kubectl version --client`    |
-| Helm       | ≥ 3.13 | `helm version`                |
-| Terraform  | ≥ 1.5  | `terraform version`           |
+---
 
-## 一、Terraform 基础设施（可选，一次性）
+## Prerequisites
 
-用 Terraform 创建 Resource Group、AKS 集群并安装 NGINX Ingress Controller：
+| Tool       | Version   | Verification Command          |
+|------------|-----------|-------------------------------|
+| Azure CLI  | ≥ 2.50    | `az --version`                |
+| kubectl    | ≥ 1.28    | `kubectl version --client`    |
+| Helm       | ≥ 3.13    | `helm version`                |
+| Terraform  | ≥ 1.5     | `terraform version`           |
+
+---
+
+## Method 1: Local / All-in-One Deployment (Quickstart)
+
+This method is ideal for quick local testing. It assumes you already have an AKS cluster (or any Kubernetes cluster) with the **NGINX Ingress Controller** installed.
+
+### Option A: Raw Kubernetes Manifests
+
+Apply the loose manifests in [`all-in-one-deploy/`](all-in-one-deploy) directly with `kubectl`:
 
 ```bash
-cd terraform
-cp terraform.tfvars.example terraform.tfvars   # 修改为你自己的值
-terraform init
-terraform plan
-terraform apply -auto-approve
+# Create the sock-shop namespace
+kubectl apply -f all-in-one-deploy/namespace.yaml
+
+# Deploy the Sock Shop microservices and the catalogue-db Secret
+kubectl apply -f all-in-one-deploy/secret.yaml
+kubectl apply -f all-in-one-deploy/deployment.yaml
+
+# Deploy the monitoring stack (Prometheus + Grafana + Node Exporter)
+kubectl apply -f all-in-one-deploy/monitoring.yaml
+
+# Apply the Ingress rules (edit the hosts first if needed)
+kubectl apply -f all-in-one-deploy/ingress.yaml
 ```
 
-> **host 域名留空**：本方案不绑定具体域名，Ingress host 由你在 Helm values 中自行填写（如 `sockshop.lukas.cloud-ip.cc`）。
+> **Note:** The manifests in [`all-in-one-deploy/`](all-in-one-deploy) use the `sock-shop` and `monitoring` namespaces. Edit the `host` fields in [`all-in-one-deploy/ingress.yaml`](all-in-one-deploy/ingress.yaml) to match your own domain.
 
-获取 kubeconfig：
+### Option B: Local Helm Deployment
 
-```bash
-export RESOURCE_GROUP="rg-sockshop"
-export AKS_CLUSTER_NAME="aks-sockshop"
-az aks get-credentials -g $RESOURCE_GROUP -n $AKS_CLUSTER_NAME --admin --overwrite-existing
-```
-
-## 二、Helm 部署 Sock Shop
-
-### dev 环境
+Deploy the charts directly from this repository with Helm:
 
 ```bash
+# Deploy the Sock Shop application (dev environment)
 helm upgrade --install sock-shop helm-chart/sock-shop \
   -f helm-chart/sock-shop/values-dev.yaml \
   --namespace sock-shop-dev --create-namespace --wait
+
+# Deploy the monitoring stack
+helm upgrade --install monitoring helm-chart/monitoring \
+  -f helm-chart/monitoring/values.yaml \
+  --namespace monitoring --create-namespace --wait
 ```
 
-### prod 环境
+For a **prod** environment, use the corresponding values file:
 
 ```bash
 helm upgrade --install sock-shop helm-chart/sock-shop \
@@ -90,71 +126,109 @@ helm upgrade --install sock-shop helm-chart/sock-shop \
   --namespace sock-shop-prod --create-namespace --wait
 ```
 
-### 配置 Ingress host 域名
+---
 
-编辑对应环境的 values 文件，填入你的域名：
+## Method 2: Production-Grade GitOps / CI/CD Deployment (Advanced)
+
+This method provisions the infrastructure with Terraform, manages the application and monitoring lifecycle with Helm Charts, and automates the whole flow with GitHub Actions.
+
+### Step 1: Provision Infrastructure with Terraform
+
+Terraform creates the Resource Group, the AKS cluster, and installs the NGINX Ingress Controller:
+
+```bash
+cd terraform
+cp terraform.tfvars.example terraform.tfvars   # edit with your own values
+terraform init
+terraform plan
+terraform apply -auto-approve
+```
+
+> **Host domain left empty:** This solution does not bind a specific domain. Fill in the Ingress `host` yourself in the Helm values (e.g. `sockshop.lukas.cloud-ip.cc`).
+
+Retrieve the kubeconfig:
+
+```bash
+export RESOURCE_GROUP="rg-sockshop"
+export AKS_CLUSTER_NAME="aks-sockshop"
+az aks get-credentials -g $RESOURCE_GROUP -n $AKS_CLUSTER_NAME --admin --overwrite-existing
+```
+
+### Step 2: Deploy with Helm Charts
+
+#### Sock Shop — dev environment
+
+```bash
+helm upgrade --install sock-shop helm-chart/sock-shop \
+  -f helm-chart/sock-shop/values-dev.yaml \
+  --namespace sock-shop-dev --create-namespace --wait
+```
+
+#### Sock Shop — prod environment
+
+```bash
+helm upgrade --install sock-shop helm-chart/sock-shop \
+  -f helm-chart/sock-shop/values-prod.yaml \
+  --namespace sock-shop-prod --create-namespace --wait
+```
+
+#### Configure the Ingress host domain
+
+Edit the values file for the target environment and fill in your domain:
 
 ```yaml
 # helm-chart/sock-shop/values-dev.yaml
 ingress:
   enabled: true
   className: nginx
-  host: "sockshop-dev.lukas.cloud-ip.cc"   # <-- 自行填写
+  host: "sockshop-dev.lukas.cloud-ip.cc"   # <-- fill in your own value
 ```
 
-然后重新执行 `helm upgrade`。
+Then re-run the corresponding `helm upgrade` command.
 
-## 三、Helm 部署 Monitoring
+#### Monitoring
 
-### dev 环境
+The unified monitoring chart (Prometheus + Grafana + Node Exporter) is deployed with a single `values.yaml`:
 
 ```bash
 helm upgrade --install monitoring helm-chart/monitoring \
-  -f helm-chart/monitoring/values-dev.yaml \
-  --namespace monitoring-dev --create-namespace --wait
+  -f helm-chart/monitoring/values.yaml \
+  --namespace monitoring --create-namespace --wait
 ```
 
-### prod 环境
-
-```bash
-helm upgrade --install monitoring helm-chart/monitoring \
-  -f helm-chart/monitoring/values-prod.yaml \
-  --namespace monitoring-prod --create-namespace --wait
-```
-
-配置 Prometheus / Grafana 域名：
+Configure the Prometheus / Grafana domains:
 
 ```yaml
-# helm-chart/monitoring/values-dev.yaml
+# helm-chart/monitoring/values.yaml
 ingress:
   enabled: true
   className: nginx
-  prometheusHost: "prometheus.lukas.cloud-ip.cc"   # <-- 自行填写
-  grafanaHost: "grafana.lukas.cloud-ip.cc"         # <-- 自行填写
+  prometheusHost: "prometheus.lukas.cloud-ip.cc"   # <-- fill in your own value
+  grafanaHost: "grafana.lukas.cloud-ip.cc"         # <-- fill in your own value
 ```
 
-访问（默认 admin / admin123）：
+Access Grafana (default `admin` / `admin123`):
 
 ```bash
-kubectl port-forward svc/grafana -n monitoring-dev 3000:80
+kubectl port-forward svc/grafana -n monitoring 3000:80
 # → http://localhost:3000
 ```
 
-## 四、GitHub Actions CI/CD
+### Step 3: Automate with GitHub Actions
 
-### 需要配置的 GitHub Secrets
+#### Required GitHub Secrets
 
-| Secret | 说明 |
-|--------|------|
-| `AZURE_CREDENTIALS` | Azure 服务主体 JSON（用于应用部署） |
-| `AZURE_CLIENT_ID` | 服务主体 Client ID（用于 Terraform） |
-| `AZURE_CLIENT_SECRET` | 服务主体 Client Secret |
-| `AZURE_SUBSCRIPTION_ID` | Azure 订阅 ID |
-| `AZURE_TENANT_ID` | Azure 租户 ID |
-| `RESOURCE_GROUP` | AKS 所在资源组 |
-| `CLUSTER_NAME` | AKS 集群名称 |
+| Secret                    | Description                                              |
+|---------------------------|----------------------------------------------------------|
+| `AZURE_CREDENTIALS`       | Azure service principal JSON (used for application deployment) |
+| `AZURE_CLIENT_ID`         | Service principal Client ID (used for Terraform)         |
+| `AZURE_CLIENT_SECRET`     | Service principal Client Secret                          |
+| `AZURE_SUBSCRIPTION_ID`   | Azure subscription ID                                    |
+| `AZURE_TENANT_ID`         | Azure tenant ID                                          |
+| `AZURE_RESOURCE_GROUP`    | Resource group containing the AKS cluster                |
+| `AZURE_CLUSTER_NAME`      | AKS cluster name                                         |
 
-### 创建服务主体
+#### Create a Service Principal
 
 ```bash
 az ad sp create-for-rbac --name "sockshop-cicd" --role Contributor \
@@ -162,28 +236,90 @@ az ad sp create-for-rbac --name "sockshop-cicd" --role Contributor \
   --sdk-auth
 ```
 
-将输出的 JSON 存入 `AZURE_CREDENTIALS`。
+Store the returned JSON in the `AZURE_CREDENTIALS` secret.
 
-### 流水线说明
+#### Pipeline Overview
 
-- **`deploy.yml`**：push 到 `main`（或手动触发）→ `helm lint` + `helm template` 校验 → `az login` → `helm upgrade` 部署 sock-shop 与 monitoring。
-- **`terraform.yml`**：push 到 `terraform/`（或手动触发）→ `terraform fmt/validate/plan/apply`。
+- **[`deploy.yml`](.github/workflows/deploy.yml):** triggered on push to `main` (or manually) → `helm lint` + `helm template` validation → `az login` → `helm upgrade` to deploy the Sock Shop and monitoring stacks.
+- **[`terraform.yml`](.github/workflows/terraform.yml):** triggered on push to `terraform/` (or manually) → `terraform fmt/validate/plan/apply`.
 
-## 清理
+---
+
+## Demo & Verification Commands
+
+Use these commands for live demos and quick validation.
+
+### Check Pod status across namespaces
 
 ```bash
-helm uninstall monitoring -n monitoring-dev
+kubectl get pods -n sock-shop-dev
+kubectl get pods -n monitoring
+```
+
+For the prod environment:
+
+```bash
+kubectl get pods -n sock-shop-prod
+```
+
+### Retrieve the public LoadBalancer IP of the Ingress Controller
+
+The NGINX Ingress Controller is deployed as a `LoadBalancer` service. Get its public IP to configure DNS (e.g. in ClouDNS):
+
+```bash
+kubectl get svc -n ingress-nginx ingress-nginx-controller
+```
+
+Point your domain's `A` record (or `CNAME`) to the `EXTERNAL-IP` shown in the output.
+
+### Port-forwarding for quick local validation
+
+```bash
+# Access the Sock Shop front-end
+kubectl port-forward svc/front-end -n sock-shop-dev 8080:80
+# → http://localhost:8080
+
+# Access Grafana
+kubectl port-forward svc/grafana -n monitoring 3000:80
+# → http://localhost:3000
+
+# Access Prometheus
+kubectl port-forward svc/prometheus -n monitoring 9090:9090
+# → http://localhost:9090
+```
+
+### Health checks
+
+```bash
+# Verify the front-end service responds
+curl -s -o /dev/null -w "%{http_code}\n" http://localhost:8080/
+
+# Check the readiness of all pods in a namespace
+kubectl get pods -n sock-shop-dev -o wide
+kubectl describe pod -n sock-shop-dev -l name=front-end
+```
+
+---
+
+## Cleanup
+
+```bash
+# Uninstall the Helm releases
+helm uninstall monitoring -n monitoring
 helm uninstall sock-shop -n sock-shop-dev
-# 或删除整个集群
+
+# Or destroy the entire cluster
 cd terraform && terraform destroy -auto-approve
 ```
 
-## 常见问题排查
+---
 
-| 现象                      | 原因 & 修复命令                                                                 |
-|---------------------------|---------------------------------------------------------------------------------|
-| `ImagePullBackOff`        | 镜像拉不到：`az aks update -g $RG -n $AKS --attach-acr $ACR` 或改用公共镜像（默认） |
-| 前端 Ingress 返回 503     | Pod 还没 Ready：`kubectl describe pod -n sock-shop-dev -l name=front-end`         |
-| Java 服务启动慢           | Spring Boot 冷启动 60~120s，探针 initialDelaySeconds 已设 300                     |
-| MongoDB Unauthorized      | 删 Pod 重建：`kubectl delete pod -n sock-shop-dev -l name=carts-db`               |
-| catalogue-db Access denied| 密码没对上 Secret：`kubectl get secret catalogue-db-secret -n sock-shop-dev -o jsonpath={.data.MYSQL_ROOT_PASSWORD} \| base64 -d` |
+## Troubleshooting
+
+| Symptom                    | Cause & Fix                                                                                       |
+|----------------------------|---------------------------------------------------------------------------------------------------|
+| `ImagePullBackOff`         | Image cannot be pulled: `az aks update -g $RG -n $AKS --attach-acr $ACR` or switch to public images (default) |
+| Front-end Ingress returns 503 | Pod is not Ready yet: `kubectl describe pod -n sock-shop-dev -l name=front-end`                  |
+| Java services start slowly | Spring Boot cold start takes 60–120s; probe `initialDelaySeconds` is already set to 300            |
+| MongoDB Unauthorized       | Delete and recreate the Pod: `kubectl delete pod -n sock-shop-dev -l name=carts-db`                |
+| catalogue-db Access denied | Password does not match the Secret: `kubectl get secret catalogue-db-secret -n sock-shop-dev -o jsonpath={.data.MYSQL_ROOT_PASSWORD} \| base64 -d` |
