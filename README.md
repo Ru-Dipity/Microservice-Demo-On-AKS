@@ -240,8 +240,12 @@ Store the returned JSON in the `AZURE_CREDENTIALS` secret.
 
 #### Pipeline Overview
 
-- **[`deploy.yml`](.github/workflows/deploy.yml):** triggered on push to `main` (or manually) → `helm lint` + `helm template` validation → `az login` → `helm upgrade` to deploy the Sock Shop and monitoring stacks.
-- **[`terraform.yml`](.github/workflows/terraform.yml):** triggered on push to `terraform/` (or manually) → `terraform fmt/validate/plan/apply`.
+The two workflows are orchestrated so that infrastructure is provisioned **before** the application is deployed:
+
+1. **[`terraform.yml`](.github/workflows/terraform.yml):** triggered on push to `terraform/` (or manually) → `terraform fmt/validate/plan/apply` to provision the Resource Group, AKS cluster, and NGINX Ingress Controller.
+2. **[`deploy.yml`](.github/workflows/deploy.yml):** triggered on push to `main` (or manually), **and automatically after `terraform.yml` completes successfully** (via `workflow_run`) → `helm lint` + `helm template` validation → `az login` → `helm upgrade` to deploy the Sock Shop and monitoring stacks.
+
+> **Note:** When `deploy.yml` is triggered by `workflow_run`, the deployment environment defaults to `dev` (the `workflow_dispatch` `environment` input is not available in that trigger). Use the manual trigger to select `prod`.
 
 ---
 

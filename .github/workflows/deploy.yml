@@ -1,6 +1,6 @@
 # =============================================================================
 # Sock Shop application deployment pipeline
-# Trigger: push to main / manual trigger
+# Trigger: push to main / manual trigger / after Terraform Infrastructure succeeds
 # Flow: Helm Lint validation -> Helm Template render validation -> deploy to AKS
 # =============================================================================
 name: Deploy Sock Shop to AKS
@@ -21,6 +21,12 @@ on:
         options:
           - dev
           - prod
+  # Automatically run after the Terraform Infrastructure workflow completes
+  # successfully, ensuring the AKS cluster exists before deploying the app.
+  workflow_run:
+    workflows: ['Terraform Infrastructure']
+    types:
+      - completed
 
 jobs:
   lint:
@@ -59,6 +65,17 @@ jobs:
       RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
       CLUSTER_NAME: ${{ secrets.AZURE_CLUSTER_NAME }}
     steps:
+      # When triggered by workflow_run, only proceed if the upstream
+      # Terraform Infrastructure workflow completed successfully.
+      - name: Verify upstream Terraform workflow succeeded
+        if: github.event_name == 'workflow_run'
+        run: |
+          if [ "${{ github.event.workflow_run.conclusion }}" != "success" ]; then
+            echo "Upstream Terraform Infrastructure workflow did not succeed (conclusion: ${{ github.event.workflow_run.conclusion }}). Aborting deploy."
+            exit 1
+          fi
+          echo "Upstream Terraform Infrastructure workflow succeeded. Proceeding with deploy."
+
       - name: Checkout
         uses: actions/checkout@v4
 
