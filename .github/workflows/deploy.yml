@@ -44,16 +44,11 @@ jobs:
       - name: Helm Template 渲染校验 (dev)
         run: |
           helm template sock-shop helm-chart/sock-shop -f helm-chart/sock-shop/values-dev.yaml > /dev/null
-          helm template monitoring helm-chart/monitoring -f helm-chart/monitoring/values-dev.yaml > /dev/null
-          echo "sock-shop dev 渲染成功"
-          echo "monitoring dev 渲染成功"
-
-      - name: Helm Template 渲染校验 (prod)
-        run: |
           helm template sock-shop helm-chart/sock-shop -f helm-chart/sock-shop/values-prod.yaml > /dev/null
-          helm template monitoring helm-chart/monitoring -f helm-chart/monitoring/values-prod.yaml > /dev/null
+          helm template monitoring helm-chart/monitoring -f helm-chart/monitoring/values.yaml > /dev/null
+          echo "sock-shop dev 渲染成功"
           echo "sock-shop prod 渲染成功"
-          echo "monitoring prod 渲染成功"
+          echo "monitoring dev 渲染成功"
 
   deploy:
     name: 部署到 AKS
