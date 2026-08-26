@@ -148,6 +148,26 @@ jobs:
             --create-namespace \
             --wait --timeout 5m
 
+      - name: Clear stuck Helm release (if any)
+        # A previous install/upgrade may have been interrupted (e.g. timeout),
+        # leaving the release in a pending state. Helm refuses to run a new
+        # operation while one is in progress, so uninstall the stuck release
+        # first. This is safe because the chart is fully declarative and will
+        # be recreated by the upgrade --install below.
+        run: |
+          NS="sock-shop-${{ env.DEPLOY_ENV }}"
+          if helm status sock-shop -n "$NS" >/dev/null 2>&1; then
+            STATUS=$(helm status sock-shop -n "$NS" -o json | jq -r '.info.status // "unknown"')
+            echo "Existing sock-shop release status: $STATUS"
+            if [[ "$STATUS" == pending-install || "$STATUS" == pending-upgrade || "$STATUS" == uninstalling ]]; then
+              echo "Release is stuck in '$STATUS'; uninstalling to clear the lock..."
+              helm uninstall sock-shop -n "$NS" --wait --timeout 5m || \
+                helm uninstall sock-shop -n "$NS" --no-hooks || true
+            fi
+          else
+            echo "No existing sock-shop release; nothing to clean up."
+          fi
+
       - name: Deploy Sock Shop microservices
         run: |
           helm upgrade --install sock-shop helm-chart/sock-shop \
