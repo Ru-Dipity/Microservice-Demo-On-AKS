@@ -72,6 +72,11 @@ resource "azurerm_kubernetes_cluster" "main" {
 
   # Optional: enable RBAC (enabled by default)
   role_based_access_control_enabled = true
+
+  # OIDC issuer is enabled on the existing cluster and cannot be disabled
+  # once enabled. Keep it set to true to match the actual cluster state and
+  # prevent Terraform from trying to disable it (which Azure rejects).
+  oidc_issuer_enabled = true
 }
 
 # =============================================================================
