@@ -7,8 +7,8 @@ namespace: monitoring-prod
 ingress:
   enabled: true
   className: nginx
-  prometheusHost: ""   # <-- 留空，用户自行填写
-  grafanaHost: ""      # <-- 留空，用户自行填写
+  prometheusHost: sockshop-prod.prometheus.lukas.cloud-ip.cc    # <-- 留空，用户自行填写
+  grafanaHost: sockshop-prod.grafana.lukas.cloud-ip.cc      # <-- 留空，用户自行填写
   tls:
     enabled: true
     secretName: monitoring-tls   # 用户自行创建 TLS Secret

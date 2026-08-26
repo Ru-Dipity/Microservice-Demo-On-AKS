@@ -38,7 +38,7 @@ sock-shop-on-aks/
 ├── .github/workflows/
 │   ├── deploy.yml                 # 应用部署流水线（Lint + 部署）
 │   └── terraform.yml              # 基础设施流水线（Plan + Apply）
-└── manifests/aks/                 # （保留）原始散落 YAML，可参考或删除
+└── all-in-one-deploy/                 # （保留）原始散落 YAML，可参考或删除
 ```
 
 ## 前置要求

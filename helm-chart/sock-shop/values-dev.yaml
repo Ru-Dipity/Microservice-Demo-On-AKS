@@ -9,7 +9,7 @@ namespace: sock-shop-dev
 ingress:
   enabled: true
   className: nginx
-  host: ""            # <-- 留空，用户自行填写（如 sockshop-dev.lukas.cloud-ip.cc）
+  host: sockshop-dev.lukas.cloud-ip.cc            # <-- 留空，用户自行填写（如 sockshop-dev.lukas.cloud-ip.cc）
   tls:
     enabled: false
     secretName: ""

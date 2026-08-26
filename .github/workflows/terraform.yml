@@ -15,10 +15,11 @@ on:
 
 env:
   TF_IN_AUTOMATION: true
-  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
-  ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  # 从已有的 AZURE_CREDENTIALS JSON 中动态解析字段
+  ARM_CLIENT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientId }}
+  ARM_CLIENT_SECRET: ${{ fromJson(secrets.AZURE_CREDENTIALS).clientSecret }}
+  ARM_TENANT_ID: ${{ fromJson(secrets.AZURE_CREDENTIALS).tenantId }}
   ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
-  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
 
 jobs:
   terraform:
@@ -30,6 +31,11 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
@@ -51,5 +57,4 @@ jobs:
         continue-on-error: false
 
       - name: Terraform Apply
-        # 生产环境建议改为手动审批（environment 保护规则）
         run: terraform apply -auto-approve tfplan

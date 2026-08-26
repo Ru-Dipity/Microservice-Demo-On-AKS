@@ -22,12 +22,6 @@ on:
           - dev
           - prod
 
-env:
-  RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
-  CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
-  # 默认环境，可通过 workflow_dispatch 覆盖
-  ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
-
 jobs:
   lint:
     name: Helm Lint & Template 校验
@@ -49,23 +43,26 @@ jobs:
 
       - name: Helm Template 渲染校验 (dev)
         run: |
-          helm template sock-shop helm-chart/sock-shop -f helm-chart/sock-shop/values-dev.yaml > /tmp/sock-shop-dev.yaml
-          helm template monitoring helm-chart/monitoring -f helm-chart/monitoring/values-dev.yaml > /tmp/monitoring-dev.yaml
+          helm template sock-shop helm-chart/sock-shop -f helm-chart/sock-shop/values-dev.yaml > /dev/null
+          helm template monitoring helm-chart/monitoring -f helm-chart/monitoring/values-dev.yaml > /dev/null
           echo "sock-shop dev 渲染成功"
           echo "monitoring dev 渲染成功"
 
       - name: Helm Template 渲染校验 (prod)
         run: |
-          helm template sock-shop helm-chart/sock-shop -f helm-chart/sock-shop/values-prod.yaml > /tmp/sock-shop-prod.yaml
-          helm template monitoring helm-chart/monitoring -f helm-chart/monitoring/values-prod.yaml > /tmp/monitoring-prod.yaml
+          helm template sock-shop helm-chart/sock-shop -f helm-chart/sock-shop/values-prod.yaml > /dev/null
+          helm template monitoring helm-chart/monitoring -f helm-chart/monitoring/values-prod.yaml > /dev/null
           echo "sock-shop prod 渲染成功"
           echo "monitoring prod 渲染成功"
 
   deploy:
-    name: 部署到 AKS (${{ env.ENVIRONMENT }})
+    name: 部署到 AKS
     runs-on: ubuntu-latest
     needs: lint
-    environment: ${{ env.ENVIRONMENT }}
+    env:
+      DEPLOY_ENV: ${{ inputs.environment || 'dev' }}
+      RESOURCE_GROUP: ${{ secrets.AZURE_RESOURCE_GROUP }}
+      CLUSTER_NAME: ${{ secrets.AZURE_CLUSTER_NAME }}
     steps:
       - name: Checkout
         uses: actions/checkout@v4
@@ -88,23 +85,25 @@ jobs:
         with:
           version: v3.14.0
 
-      - name: 部署 Sock Shop
-        run: |
-          helm upgrade --install sock-shop helm-chart/sock-shop \
-            -f helm-chart/sock-shop/values-${{ env.ENVIRONMENT }}.yaml \
-            --namespace sock-shop-${{ env.ENVIRONMENT }} \
-            --create-namespace \
-            --wait
-
-      - name: 部署 Monitoring
+      - name: 部署 Monitoring 基础监控
         run: |
           helm upgrade --install monitoring helm-chart/monitoring \
-            -f helm-chart/monitoring/values-${{ env.ENVIRONMENT }}.yaml \
-            --namespace monitoring-${{ env.ENVIRONMENT }} \
+            -f helm-chart/monitoring/values-${{ env.DEPLOY_ENV }}.yaml \
+            --namespace monitoring \
             --create-namespace \
-            --wait
+            --wait --timeout 5m
+
+      - name: 部署 Sock Shop 微服务
+        run: |
+          helm upgrade --install sock-shop helm-chart/sock-shop \
+            -f helm-chart/sock-shop/values-${{ env.DEPLOY_ENV }}.yaml \
+            --namespace sock-shop-${{ env.DEPLOY_ENV }} \
+            --create-namespace \
+            --wait --timeout 5m
 
       - name: 验证 Pod 状态
         run: |
-          kubectl get pods -n sock-shop-${{ env.ENVIRONMENT }}
-          kubectl get pods -n monitoring-${{ env.ENVIRONMENT }}
+          echo "=== Monitoring Pods ==="
+          kubectl get pods -n monitoring
+          echo "=== Sock Shop Pods (${{ env.DEPLOY_ENV }}) ==="
+          kubectl get pods -n sock-shop-${{ env.DEPLOY_ENV }}
