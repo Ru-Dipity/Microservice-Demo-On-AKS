@@ -1,0 +1,14 @@
+apiVersion: v2
+name: monitoring
+description: Prometheus + Grafana + Node Exporter monitoring stack for AKS
+type: application
+version: 0.1.0
+appVersion: "1.0"
+keywords:
+  - monitoring
+  - prometheus
+  - grafana
+  - node-exporter
+home: https://prometheus.io
+maintainers:
+  - name: Sock Shop on AKS

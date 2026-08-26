@@ -1,0 +1,60 @@
+# =============================================================================
+# Monitoring Helm Chart — 默认 values（作为 dev 基准）
+# 通过 values-dev.yaml / values-prod.yaml 覆盖环境差异
+# =============================================================================
+
+# 命名空间
+namespace: monitoring
+
+# 镜像拉取策略
+imagePullPolicy: IfNotPresent
+
+# -----------------------------------------------------------------------------
+# Ingress 配置
+# host 留空，用户后续自行填写（如 prometheus.lukas.cloud-ip.cc / grafana.lukas.cloud-ip.cc）
+# -----------------------------------------------------------------------------
+ingress:
+  enabled: true
+  className: nginx
+  prometheusHost: ""   # <-- 留空，用户自行填写
+  grafanaHost: ""      # <-- 留空，用户自行填写
+  tls:
+    enabled: false
+    secretName: ""
+
+# -----------------------------------------------------------------------------
+# Prometheus
+# -----------------------------------------------------------------------------
+prometheus:
+  enabled: true
+  image: prom/prometheus:v2.52.0
+  replicas: 1
+  retention: 7d
+  scrapeInterval: 15s
+  evaluationInterval: 15s
+  resources:
+    requests: { cpu: 100m, memory: 256Mi }
+    limits:   { cpu: 500m, memory: 1Gi }
+
+# -----------------------------------------------------------------------------
+# Grafana
+# -----------------------------------------------------------------------------
+grafana:
+  enabled: true
+  image: grafana/grafana:10.4.2
+  replicas: 1
+  adminUser: admin
+  adminPassword: admin123
+  resources:
+    requests: { cpu: 100m, memory: 128Mi }
+    limits:   { cpu: 500m, memory: 512Mi }
+
+# -----------------------------------------------------------------------------
+# Node Exporter
+# -----------------------------------------------------------------------------
+nodeExporter:
+  enabled: true
+  image: prom/node-exporter:v1.8.0
+  resources:
+    requests: { cpu: 10m, memory: 20Mi }
+    limits:   { cpu: 50m, memory: 50Mi }

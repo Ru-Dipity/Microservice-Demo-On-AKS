@@ -1,0 +1,13 @@
+apiVersion: v2
+name: sock-shop
+description: Sock Shop microservices demo application for AKS
+type: application
+version: 0.1.0
+appVersion: "1.0"
+keywords:
+  - sock-shop
+  - microservices
+  - demo
+home: https://github.com/microservices-demo/microservices-demo
+maintainers:
+  - name: Sock Shop on AKS

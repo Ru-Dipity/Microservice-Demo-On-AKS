@@ -1,0 +1,46 @@
+{{- if .Values.prometheus.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: {{ include "monitoring.namespace" . }}
+  labels:
+    app: prometheus
+    {{- include "monitoring.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.prometheus.replicas }}
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      containers:
+        - name: prometheus
+          image: {{ .Values.prometheus.image }}
+          imagePullPolicy: {{ .Values.imagePullPolicy }}
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--storage.tsdb.retention.time={{ .Values.prometheus.retention }}"
+          ports:
+            - name: web
+              containerPort: 9090
+          resources:
+            {{- toYaml .Values.prometheus.resources | nindent 12 }}
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+            - name: data-volume
+              mountPath: /prometheus
+      volumes:
+        - name: config-volume
+          configMap:
+            name: prometheus-config
+        - name: data-volume
+          emptyDir: {}
+{{- end }}

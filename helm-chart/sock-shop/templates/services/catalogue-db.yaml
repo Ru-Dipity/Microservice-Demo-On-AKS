@@ -1,0 +1,53 @@
+{{ $svc := index .Values.services "catalogue-db" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalogue-db
+  namespace: {{ include "sock-shop.namespace" . }}
+  labels:
+    name: catalogue-db
+    {{- include "sock-shop.labels" . | nindent 4 }}
+spec:
+  replicas: {{ $svc.replicas | default 1 }}
+  selector:
+    matchLabels:
+      name: catalogue-db
+  template:
+    metadata:
+      labels:
+        name: catalogue-db
+    spec:
+      containers:
+        - name: catalogue-db
+          image: {{ $svc.image }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          env:
+            - name: MYSQL_ROOT_PASSWORD
+              valueFrom:
+                secretKeyRef:
+                  name: catalogue-db-secret
+                  key: MYSQL_ROOT_PASSWORD
+            {{- range $k, $v := $svc.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          ports:
+            - name: mysql
+              containerPort: {{ $svc.port }}
+      nodeSelector:
+        {{- toYaml $.Values.nodeSelector | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalogue-db
+  labels:
+    name: catalogue-db
+    {{- include "sock-shop.labels" . | nindent 4 }}
+  namespace: {{ include "sock-shop.namespace" . }}
+spec:
+  ports:
+    - port: {{ $svc.port }}
+      targetPort: {{ $svc.port }}
+  selector:
+    name: catalogue-db

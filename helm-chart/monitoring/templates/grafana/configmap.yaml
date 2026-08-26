@@ -1,0 +1,20 @@
+{{- if .Values.grafana.enabled }}
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: {{ include "monitoring.namespace" . }}
+  labels:
+    {{- include "monitoring.labels" . | nindent 4 }}
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus-AKS
+        type: prometheus
+        access: proxy
+        url: http://prometheus.{{ include "monitoring.namespace" . }}.svc.cluster.local:9090
+        isDefault: true
+        uid: prometheus-aks
+        editable: true
+{{- end }}

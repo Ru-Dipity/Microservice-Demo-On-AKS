@@ -1,0 +1,54 @@
+{{ $svc := index .Values.services "user-db" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: user-db
+  namespace: {{ include "sock-shop.namespace" . }}
+  labels:
+    name: user-db
+    {{- include "sock-shop.labels" . | nindent 4 }}
+spec:
+  replicas: {{ $svc.replicas | default 1 }}
+  selector:
+    matchLabels:
+      name: user-db
+  template:
+    metadata:
+      labels:
+        name: user-db
+    spec:
+      containers:
+        - name: user-db
+          image: {{ $svc.image }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          ports:
+            - name: mongo
+              containerPort: {{ $svc.port }}
+          {{- if $svc.securityContext }}
+          securityContext:
+            {{- toYaml $svc.securityContext | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp-volume
+      volumes:
+        - name: tmp-volume
+          emptyDir:
+            medium: Memory
+      nodeSelector:
+        {{- toYaml $.Values.nodeSelector | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: user-db
+  labels:
+    name: user-db
+    {{- include "sock-shop.labels" . | nindent 4 }}
+  namespace: {{ include "sock-shop.namespace" . }}
+spec:
+  ports:
+    - port: {{ $svc.port }}
+      targetPort: {{ $svc.port }}
+  selector:
+    name: user-db

@@ -1,0 +1,110 @@
+# =============================================================================
+# Sock Shop 应用部署流水线
+# 触发：push 到 main / 手动触发
+# 流程：Helm Lint 校验 -> Helm Template 渲染校验 -> 部署到 AKS
+# =============================================================================
+name: Deploy Sock Shop to AKS
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'helm-chart/**'
+      - '.github/workflows/deploy.yml'
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: '部署环境 (dev / prod)'
+        required: true
+        default: 'dev'
+        type: choice
+        options:
+          - dev
+          - prod
+
+env:
+  RESOURCE_GROUP: ${{ secrets.RESOURCE_GROUP }}
+  CLUSTER_NAME: ${{ secrets.CLUSTER_NAME }}
+  # 默认环境，可通过 workflow_dispatch 覆盖
+  ENVIRONMENT: ${{ github.event.inputs.environment || 'dev' }}
+
+jobs:
+  lint:
+    name: Helm Lint & Template 校验
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: Helm Lint - sock-shop
+        run: helm lint helm-chart/sock-shop
+
+      - name: Helm Lint - monitoring
+        run: helm lint helm-chart/monitoring
+
+      - name: Helm Template 渲染校验 (dev)
+        run: |
+          helm template sock-shop helm-chart/sock-shop -f helm-chart/sock-shop/values-dev.yaml > /tmp/sock-shop-dev.yaml
+          helm template monitoring helm-chart/monitoring -f helm-chart/monitoring/values-dev.yaml > /tmp/monitoring-dev.yaml
+          echo "sock-shop dev 渲染成功"
+          echo "monitoring dev 渲染成功"
+
+      - name: Helm Template 渲染校验 (prod)
+        run: |
+          helm template sock-shop helm-chart/sock-shop -f helm-chart/sock-shop/values-prod.yaml > /tmp/sock-shop-prod.yaml
+          helm template monitoring helm-chart/monitoring -f helm-chart/monitoring/values-prod.yaml > /tmp/monitoring-prod.yaml
+          echo "sock-shop prod 渲染成功"
+          echo "monitoring prod 渲染成功"
+
+  deploy:
+    name: 部署到 AKS (${{ env.ENVIRONMENT }})
+    runs-on: ubuntu-latest
+    needs: lint
+    environment: ${{ env.ENVIRONMENT }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Azure Login
+        uses: azure/login@v2
+        with:
+          creds: ${{ secrets.AZURE_CREDENTIALS }}
+
+      - name: 获取 AKS 凭据
+        uses: azure/aks-set-context@v3
+        with:
+          resource-group: ${{ env.RESOURCE_GROUP }}
+          cluster-name: ${{ env.CLUSTER_NAME }}
+          admin: 'false'
+          use-kubelogin: 'true'
+
+      - name: Setup Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: v3.14.0
+
+      - name: 部署 Sock Shop
+        run: |
+          helm upgrade --install sock-shop helm-chart/sock-shop \
+            -f helm-chart/sock-shop/values-${{ env.ENVIRONMENT }}.yaml \
+            --namespace sock-shop-${{ env.ENVIRONMENT }} \
+            --create-namespace \
+            --wait
+
+      - name: 部署 Monitoring
+        run: |
+          helm upgrade --install monitoring helm-chart/monitoring \
+            -f helm-chart/monitoring/values-${{ env.ENVIRONMENT }}.yaml \
+            --namespace monitoring-${{ env.ENVIRONMENT }} \
+            --create-namespace \
+            --wait
+
+      - name: 验证 Pod 状态
+        run: |
+          kubectl get pods -n sock-shop-${{ env.ENVIRONMENT }}
+          kubectl get pods -n monitoring-${{ env.ENVIRONMENT }}

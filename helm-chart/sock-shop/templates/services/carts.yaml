@@ -1,0 +1,66 @@
+{{ $svc := .Values.services.carts }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: carts
+  namespace: {{ include "sock-shop.namespace" . }}
+  labels:
+    name: carts
+    {{- include "sock-shop.labels" . | nindent 4 }}
+spec:
+  replicas: {{ $svc.replicas | default 1 }}
+  selector:
+    matchLabels:
+      name: carts
+  template:
+    metadata:
+      labels:
+        name: carts
+    spec:
+      containers:
+        - name: carts
+          image: {{ $svc.image }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          {{- if $svc.env }}
+          env:
+            {{- range $k, $v := $svc.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- end }}
+          {{- if $svc.resources }}
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          {{- end }}
+          ports:
+            - containerPort: {{ $svc.port }}
+          {{- if $svc.securityContext }}
+          securityContext:
+            {{- toYaml $svc.securityContext | nindent 12 }}
+          {{- end }}
+          volumeMounts:
+            - mountPath: /tmp
+              name: tmp-volume
+      volumes:
+        - name: tmp-volume
+          emptyDir:
+            medium: Memory
+      nodeSelector:
+        {{- toYaml $.Values.nodeSelector | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: carts
+  annotations:
+    prometheus.io/scrape: {{ $svc.scrape | default "false" | quote }}
+  labels:
+    name: carts
+    {{- include "sock-shop.labels" . | nindent 4 }}
+  namespace: {{ include "sock-shop.namespace" . }}
+spec:
+  ports:
+    - port: {{ $svc.port }}
+      targetPort: {{ $svc.port }}
+  selector:
+    name: carts

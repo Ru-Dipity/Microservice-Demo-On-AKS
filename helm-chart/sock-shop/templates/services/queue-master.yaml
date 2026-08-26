@@ -1,0 +1,55 @@
+{{ $svc := index .Values.services "queue-master" }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: queue-master
+  namespace: {{ include "sock-shop.namespace" . }}
+  labels:
+    name: queue-master
+    {{- include "sock-shop.labels" . | nindent 4 }}
+spec:
+  replicas: {{ $svc.replicas | default 1 }}
+  selector:
+    matchLabels:
+      name: queue-master
+  template:
+    metadata:
+      labels:
+        name: queue-master
+    spec:
+      containers:
+        - name: queue-master
+          image: {{ $svc.image }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          {{- if $svc.env }}
+          env:
+            {{- range $k, $v := $svc.env }}
+            - name: {{ $k }}
+              value: {{ $v | quote }}
+            {{- end }}
+          {{- end }}
+          {{- if $svc.resources }}
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          {{- end }}
+          ports:
+            - containerPort: {{ $svc.port }}
+      nodeSelector:
+        {{- toYaml $.Values.nodeSelector | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: queue-master
+  annotations:
+    prometheus.io/scrape: {{ $svc.scrape | default "false" | quote }}
+  labels:
+    name: queue-master
+    {{- include "sock-shop.labels" . | nindent 4 }}
+  namespace: {{ include "sock-shop.namespace" . }}
+spec:
+  ports:
+    - port: {{ $svc.port }}
+      targetPort: {{ $svc.port }}
+  selector:
+    name: queue-master

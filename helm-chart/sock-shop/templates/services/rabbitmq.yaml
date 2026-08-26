@@ -1,0 +1,66 @@
+{{ $svc := .Values.services.rabbitmq }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: rabbitmq
+  namespace: {{ include "sock-shop.namespace" . }}
+  labels:
+    name: rabbitmq
+    {{- include "sock-shop.labels" . | nindent 4 }}
+spec:
+  replicas: {{ $svc.replicas | default 1 }}
+  selector:
+    matchLabels:
+      name: rabbitmq
+  template:
+    metadata:
+      labels:
+        name: rabbitmq
+      annotations:
+        prometheus.io/scrape: "false"
+    spec:
+      containers:
+        - name: rabbitmq
+          image: {{ $svc.image }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          ports:
+            {{- range $svc.ports }}
+            - containerPort: {{ .containerPort }}
+              name: {{ .name }}
+            {{- end }}
+          {{- if $svc.securityContext }}
+          securityContext:
+            {{- toYaml $svc.securityContext | nindent 12 }}
+          {{- end }}
+        - name: rabbitmq-exporter
+          image: {{ $svc.exporterImage }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          ports:
+            - containerPort: 9419
+              name: exporter
+      nodeSelector:
+        {{- toYaml $.Values.nodeSelector | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: rabbitmq
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9419"
+  labels:
+    name: rabbitmq
+    {{- include "sock-shop.labels" . | nindent 4 }}
+  namespace: {{ include "sock-shop.namespace" . }}
+spec:
+  ports:
+    {{- range $svc.servicePorts }}
+    - port: {{ .port }}
+      name: {{ .name }}
+      targetPort: {{ .targetPort }}
+      {{- if .protocol }}
+      protocol: {{ .protocol }}
+      {{- end }}
+    {{- end }}
+  selector:
+    name: rabbitmq

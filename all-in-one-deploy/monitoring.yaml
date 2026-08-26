@@ -1,0 +1,328 @@
+# 1. RBAC 权限
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: prometheus
+  namespace: monitoring
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: prometheus-k8s-role
+rules:
+  - apiGroups: [""]
+    resources:
+      - nodes
+      - nodes/metrics
+      - services
+      - endpoints
+      - pods
+    verbs: ["get", "list", "watch"]
+  - apiGroups: [""]
+    resources:
+      - configmaps
+    verbs: ["get"]
+  - nonResourceURLs: ["/metrics"]
+    verbs: ["get"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: prometheus-k8s-binding
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: prometheus-k8s-role
+subjects:
+  - kind: ServiceAccount
+    name: prometheus
+    namespace: monitoring
+
+---
+# 2. Prometheus 配置 (采用 role: endpoints 自动发现)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: prometheus-config
+  namespace: monitoring
+data:
+  prometheus.yml: |
+    global:
+      scrape_interval: 15s
+      evaluation_interval: 15s
+
+    scrape_configs:
+      - job_name: 'prometheus'
+        static_configs:
+          - targets: ['localhost:9090']
+
+      # 核心：读取 Service 上的 annotation，抓取后端真实的各个 Pod
+      - job_name: 'kubernetes-service-endpoints'
+        kubernetes_sd_configs:
+          - role: endpoints
+        relabel_configs:
+          # 1. 过滤：只抓取 Service 上标注了 prometheus.io/scrape: "true" 的目标
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_scrape]
+            action: keep
+            regex: true
+          # 2. 动态重写指标路径 (默认 /metrics)
+          - source_labels: [__meta_kubernetes_service_annotation_prometheus_io_path]
+            action: replace
+            target_label: __metrics_path__
+            regex: (.+)
+          # 3. 如果 Service 显式指定了端口(如 rabbitmq 的 9419)，则替换默认端口
+          - source_labels: [__address__, __meta_kubernetes_service_annotation_prometheus_io_port]
+            action: replace
+            target_label: __address__
+            regex: ([^:]+)(?::\d+)?;(\d+)
+            replacement: $1:$2
+          # 4. 自动打上 namespace / service / pod 标签
+          - source_labels: [__meta_kubernetes_namespace]
+            target_label: namespace
+          - source_labels: [__meta_kubernetes_service_name]
+            target_label: service
+          - source_labels: [__meta_kubernetes_pod_name]
+            target_label: pod
+
+---
+# 3. Prometheus Deployment & Service
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: prometheus
+  template:
+    metadata:
+      labels:
+        app: prometheus
+    spec:
+      serviceAccountName: prometheus
+      containers:
+        - name: prometheus
+          image: prom/prometheus:v2.52.0
+          args:
+            - "--config.file=/etc/prometheus/prometheus.yml"
+            - "--storage.tsdb.path=/prometheus"
+            - "--storage.tsdb.retention.time=7d"
+          ports:
+            - name: web
+              containerPort: 9090
+          volumeMounts:
+            - name: config-volume
+              mountPath: /etc/prometheus/prometheus.yml
+              subPath: prometheus.yml
+            - name: data-volume
+              mountPath: /prometheus
+      volumes:
+        - name: config-volume
+          configMap:
+            name: prometheus-config
+        - name: data-volume
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: prometheus
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  selector:
+    app: prometheus
+  ports:
+    - name: web
+      port: 9090
+      targetPort: 9090
+
+---
+# 4. Grafana 数据源与工作负载
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-datasources
+  namespace: monitoring
+data:
+  datasources.yaml: |
+    apiVersion: 1
+    datasources:
+      - name: Prometheus-AKS
+        type: prometheus
+        access: proxy
+        url: http://prometheus.monitoring.svc.cluster.local:9090
+        isDefault: true
+        uid: prometheus-aks
+        editable: true
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: grafana
+  template:
+    metadata:
+      labels:
+        app: grafana
+    spec:
+      containers:
+        - name: grafana
+          image: grafana/grafana:10.4.2
+          env:
+            - name: GF_SECURITY_ADMIN_USER
+              value: admin
+            - name: GF_SECURITY_ADMIN_PASSWORD
+              value: admin123
+          ports:
+            - name: http
+              containerPort: 3000
+          volumeMounts:
+            - name: datasource-volume
+              mountPath: /etc/grafana/provisioning/datasources/datasources.yaml
+              subPath: datasources.yaml
+            - name: storage-volume
+              mountPath: /var/lib/grafana
+      volumes:
+        - name: datasource-volume
+          configMap:
+            name: grafana-datasources
+        - name: storage-volume
+          emptyDir: {}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: grafana
+  namespace: monitoring
+spec:
+  type: ClusterIP
+  selector:
+    app: grafana
+  ports:
+    - name: http
+      port: 80
+      targetPort: 3000
+
+---
+# 5. 监控 Ingress
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: monitoring-ingress
+  namespace: monitoring
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: prometheus.lukas.cloud-ip.cc
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: prometheus
+                port:
+                  number: 9090
+    - host: grafana.lukas.cloud-ip.cc
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: grafana
+                port:
+                  number: 80
+
+
+---
+# ==========================================
+# Node Exporter DaemonSet (采集 AKS 节点硬件指标)
+# ==========================================
+apiVersion: apps/v1
+kind: DaemonSet
+metadata:
+  name: node-exporter
+  namespace: monitoring
+  labels:
+    app: node-exporter
+spec:
+  selector:
+    matchLabels:
+      app: node-exporter
+  template:
+    metadata:
+      labels:
+        app: node-exporter
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "9100"
+    spec:
+      hostNetwork: true
+      hostPID: true
+      containers:
+        - name: node-exporter
+          image: prom/node-exporter:v1.8.0
+          args:
+            - "--path.procfs=/host/proc"
+            - "--path.sysfs=/host/sys"
+            - "--path.rootfs=/rootfs"
+          ports:
+            - containerPort: 9100
+              hostPort: 9100
+              name: metrics
+          resources:
+            limits:
+              cpu: 50m
+              memory: 50Mi
+            requests:
+              cpu: 10m
+              memory: 20Mi
+          volumeMounts:
+            - name: proc
+              mountPath: /host/proc
+              readOnly: true
+            - name: sys
+              mountPath: /host/sys
+              readOnly: true
+            - name: root
+              mountPath: /rootfs
+              readOnly: true
+      volumes:
+        - name: proc
+          hostPath:
+            path: /proc
+        - name: sys
+          hostPath:
+            path: /sys
+        - name: root
+          hostPath:
+            path: /
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: node-exporter
+  namespace: monitoring
+  annotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "9100"
+  labels:
+    app: node-exporter
+spec:
+  type: ClusterIP
+  clusterIP: None
+  ports:
+    - name: metrics
+      port: 9100
+      targetPort: 9100
+  selector:
+    app: node-exporter

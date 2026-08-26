@@ -17,3 +17,13 @@ manifests/base/.env.secret
 
 # Dependency directories (remove the comment below to include it)
 # vendor/
+
+# Terraform
+terraform/.terraform/
+terraform/*.tfstate
+terraform/*.tfstate.*
+terraform/*.tfvars
+!terraform/terraform.tfvars.example
+terraform/crash.log
+terraform/override.tf
+terraform/override.tf.json

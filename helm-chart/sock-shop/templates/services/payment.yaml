@@ -1,0 +1,70 @@
+{{ $svc := .Values.services.payment }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: payment
+  namespace: {{ include "sock-shop.namespace" . }}
+  labels:
+    name: payment
+    {{- include "sock-shop.labels" . | nindent 4 }}
+spec:
+  replicas: {{ $svc.replicas | default 1 }}
+  selector:
+    matchLabels:
+      name: payment
+  template:
+    metadata:
+      labels:
+        name: payment
+    spec:
+      containers:
+        - name: payment
+          image: {{ $svc.image }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          {{- if $svc.resources }}
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          {{- end }}
+          ports:
+            - containerPort: {{ $svc.port }}
+          {{- if $svc.securityContext }}
+          securityContext:
+            {{- toYaml $svc.securityContext | nindent 12 }}
+          {{- end }}
+          {{- if $svc.probes }}
+          {{- if $svc.probes.liveness }}
+          livenessProbe:
+            httpGet:
+              path: {{ $svc.probes.liveness.path }}
+              port: {{ $svc.port }}
+            initialDelaySeconds: {{ $svc.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ $svc.probes.liveness.periodSeconds }}
+          {{- end }}
+          {{- if $svc.probes.readiness }}
+          readinessProbe:
+            httpGet:
+              path: {{ $svc.probes.readiness.path }}
+              port: {{ $svc.port }}
+            initialDelaySeconds: {{ $svc.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ $svc.probes.readiness.periodSeconds }}
+          {{- end }}
+          {{- end }}
+      nodeSelector:
+        {{- toYaml $.Values.nodeSelector | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: payment
+  annotations:
+    prometheus.io/scrape: {{ $svc.scrape | default "false" | quote }}
+  labels:
+    name: payment
+    {{- include "sock-shop.labels" . | nindent 4 }}
+  namespace: {{ include "sock-shop.namespace" . }}
+spec:
+  ports:
+    - port: {{ $svc.port }}
+      targetPort: {{ $svc.port }}
+  selector:
+    name: payment

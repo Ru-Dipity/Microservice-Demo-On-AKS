@@ -1,0 +1,55 @@
+# =============================================================================
+# Terraform 基础设施流水线
+# 触发：push 到 terraform/ 目录 / 手动触发
+# 流程：fmt 校验 -> validate -> plan -> apply
+# =============================================================================
+name: Terraform Infrastructure
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - 'terraform/**'
+      - '.github/workflows/terraform.yml'
+  workflow_dispatch:
+
+env:
+  TF_IN_AUTOMATION: true
+  ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+  ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+  ARM_SUBSCRIPTION_ID: ${{ secrets.AZURE_SUBSCRIPTION_ID }}
+  ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+
+jobs:
+  terraform:
+    name: Terraform Plan & Apply
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: terraform
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: 1.8.0
+
+      - name: Terraform Init
+        run: terraform init
+
+      - name: Terraform Format Check
+        run: terraform fmt -check -diff
+
+      - name: Terraform Validate
+        run: terraform validate
+
+      - name: Terraform Plan
+        id: plan
+        run: terraform plan -out=tfplan
+        continue-on-error: false
+
+      - name: Terraform Apply
+        # 生产环境建议改为手动审批（environment 保护规则）
+        run: terraform apply -auto-approve tfplan

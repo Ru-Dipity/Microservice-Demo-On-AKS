@@ -1,0 +1,76 @@
+{{ $svc := .Values.services.catalogue }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: catalogue
+  namespace: {{ include "sock-shop.namespace" . }}
+  labels:
+    name: catalogue
+    {{- include "sock-shop.labels" . | nindent 4 }}
+spec:
+  replicas: {{ $svc.replicas | default 1 }}
+  selector:
+    matchLabels:
+      name: catalogue
+  template:
+    metadata:
+      labels:
+        name: catalogue
+    spec:
+      containers:
+        - name: catalogue
+          image: {{ $svc.image }}
+          imagePullPolicy: {{ $.Values.imagePullPolicy }}
+          {{- if $svc.command }}
+          command: {{ toYaml $svc.command | nindent 12 }}
+          {{- end }}
+          {{- if $svc.args }}
+          args: {{ toYaml $svc.args | nindent 12 }}
+          {{- end }}
+          {{- if $svc.resources }}
+          resources:
+            {{- toYaml $svc.resources | nindent 12 }}
+          {{- end }}
+          ports:
+            - containerPort: {{ $svc.port }}
+          {{- if $svc.securityContext }}
+          securityContext:
+            {{- toYaml $svc.securityContext | nindent 12 }}
+          {{- end }}
+          {{- if $svc.probes }}
+          {{- if $svc.probes.liveness }}
+          livenessProbe:
+            httpGet:
+              path: {{ $svc.probes.liveness.path }}
+              port: {{ $svc.port }}
+            initialDelaySeconds: {{ $svc.probes.liveness.initialDelaySeconds }}
+            periodSeconds: {{ $svc.probes.liveness.periodSeconds }}
+          {{- end }}
+          {{- if $svc.probes.readiness }}
+          readinessProbe:
+            httpGet:
+              path: {{ $svc.probes.readiness.path }}
+              port: {{ $svc.port }}
+            initialDelaySeconds: {{ $svc.probes.readiness.initialDelaySeconds }}
+            periodSeconds: {{ $svc.probes.readiness.periodSeconds }}
+          {{- end }}
+          {{- end }}
+      nodeSelector:
+        {{- toYaml $.Values.nodeSelector | nindent 8 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: catalogue
+  annotations:
+    prometheus.io/scrape: {{ $svc.scrape | default "false" | quote }}
+  labels:
+    name: catalogue
+    {{- include "sock-shop.labels" . | nindent 4 }}
+  namespace: {{ include "sock-shop.namespace" . }}
+spec:
+  ports:
+    - port: {{ $svc.port }}
+      targetPort: {{ $svc.port }}
+  selector:
+    name: catalogue

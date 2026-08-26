@@ -1,0 +1,36 @@
+# =============================================================================
+# Sock Shop — dev 环境覆盖
+# 部署：helm upgrade --install sock-shop ./helm-chart/sock-shop \
+#         -f helm-chart/sock-shop/values-dev.yaml -n sock-shop-dev --create-namespace
+# =============================================================================
+
+namespace: sock-shop-dev
+
+ingress:
+  enabled: true
+  className: nginx
+  host: ""            # <-- 留空，用户自行填写（如 sockshop-dev.lukas.cloud-ip.cc）
+  tls:
+    enabled: false
+    secretName: ""
+
+# dev 环境：单副本、资源请求较小
+services:
+  carts:
+    replicas: 1
+  catalogue:
+    replicas: 1
+  front-end:
+    replicas: 1
+  orders:
+    replicas: 1
+  payment:
+    replicas: 1
+  queue-master:
+    replicas: 1
+  rabbitmq:
+    replicas: 1
+  shipping:
+    replicas: 1
+  user:
+    replicas: 1

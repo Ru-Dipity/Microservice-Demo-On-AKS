@@ -1,0 +1,6 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: {{ include "sock-shop.namespace" . }}
+  labels:
+    {{- include "sock-shop.labels" . | nindent 4 }}
