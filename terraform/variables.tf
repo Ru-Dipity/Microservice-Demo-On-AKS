@@ -5,25 +5,25 @@
 variable "resource_group_name" {
   description = "Azure Resource Group 名称"
   type        = string
-  default     = "rg-sockshop"
+  default     = "rg-sockshop-aks"
 }
 
 variable "location" {
   description = "Azure 区域"
   type        = string
-  default     = "westeurope"
+  default     = "germanywestcentral"
 }
 
 variable "cluster_name" {
   description = "AKS 集群名称"
   type        = string
-  default     = "aks-sockshop"
+  default     = "sockshop-aks"
 }
 
 variable "kubernetes_version" {
   description = "Kubernetes 版本（留空则使用默认）"
   type        = string
-  default     = ""
+  default     = "1.35"
 }
 
 variable "node_count" {
@@ -35,7 +35,7 @@ variable "node_count" {
 variable "vm_size" {
   description = "默认节点池 VM 规格"
   type        = string
-  default     = "Standard_B2s"
+  default     = "Standard_D2s_v7"
 }
 
 variable "node_resource_group" {
