@@ -1,23 +1,18 @@
 # =============================================================================
-# Monitoring Helm Chart — 默认 values（作为 dev 基准）
-# 通过 values-dev.yaml / values-prod.yaml 覆盖环境差异
+# Monitoring Helm Chart — 统一监控栈配置
 # =============================================================================
-
-# 命名空间
-namespace: monitoring
 
 # 镜像拉取策略
 imagePullPolicy: IfNotPresent
 
 # -----------------------------------------------------------------------------
 # Ingress 配置
-# host 留空，用户后续自行填写（如 prometheus.lukas.cloud-ip.cc / grafana.lukas.cloud-ip.cc）
 # -----------------------------------------------------------------------------
 ingress:
   enabled: true
   className: nginx
-  prometheusHost: ""   # <-- 留空，用户自行填写
-  grafanaHost: ""      # <-- 留空，用户自行填写
+  prometheusHost: "prometheus.lukas.cloud-ip.cc"
+  grafanaHost: "grafana.lukas.cloud-ip.cc"
   tls:
     enabled: false
     secretName: ""

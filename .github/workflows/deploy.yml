@@ -71,7 +71,7 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
-          
+
       - name: Set up kubelogin for Azure auth
         uses: azure/use-kubelogin@v1
         with:
@@ -93,7 +93,7 @@ jobs:
       - name: 部署 Monitoring 基础监控
         run: |
           helm upgrade --install monitoring helm-chart/monitoring \
-            -f helm-chart/monitoring/values-${{ env.DEPLOY_ENV }}.yaml \
+            -f helm-chart/monitoring/values.yaml \
             --namespace monitoring \
             --create-namespace \
             --wait --timeout 5m
