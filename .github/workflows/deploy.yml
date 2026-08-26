@@ -71,6 +71,11 @@ jobs:
         uses: azure/login@v2
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
+          
+      - name: Set up kubelogin for Azure auth
+        uses: azure/use-kubelogin@v1
+        with:
+          kubelogin-version: 'v0.1.3'
 
       - name: 获取 AKS 凭据
         uses: azure/aks-set-context@v3
