@@ -153,6 +153,10 @@ export AKS_CLUSTER_NAME="aks-sockshop"
 az aks get-credentials -g $RESOURCE_GROUP -n $AKS_CLUSTER_NAME --admin --overwrite-existing
 ```
 
+After a successful `terraform apply`, the `azurerm_resource_group_template_deployment` or Storage Account used for the remote `tfstate` will appear in the Azure Portal like the one shown below (blob container holding your Terraform state):
+
+![Terraform State Blob](images/Blob%20for%20tfstate.png)
+
 ### Step 2: Deploy with Helm Charts
 
 #### Sock Shop — dev environment
@@ -213,6 +217,10 @@ kubectl port-forward svc/grafana -n monitoring 3000:80
 # → http://localhost:3000
 ```
 
+After logging in, the main dashboard (or the Explore view) will render the metrics scraped from the Sock Shop services and the Kubernetes cluster:
+
+![Grafana Dashboard](images/Grafana.png)
+
 ### Step 3: Automate with GitHub Actions
 
 #### Required GitHub Secrets
@@ -226,6 +234,10 @@ kubectl port-forward svc/grafana -n monitoring 3000:80
 | `AZURE_TENANT_ID`         | Azure tenant ID                                          |
 | `AZURE_RESOURCE_GROUP`    | Resource group containing the AKS cluster                |
 | `AZURE_CLUSTER_NAME`      | AKS cluster name                                         |
+
+Configure these secrets under **Settings → Secrets and variables → Actions → New repository secret** in the GitHub repository. The screenshot below shows the complete list:
+
+![GitHub Repository Secrets](images/Github%20Repo%20Secrets.png)
 
 #### Create a Service Principal
 
@@ -268,6 +280,10 @@ For the prod environment:
 kubectl get pods -n sock-shop-prod
 ```
 
+A successful deployment will show all pods in the `Running` / `Completed` state with `READY N/N` (no `CrashLoopBackOff`, no `ImagePullBackOff`). Example screenshot from the sock-shop-dev namespace:
+
+![Pods Status](images/Pods%20Status.png)
+
 ### Retrieve the public LoadBalancer IP of the Ingress Controller
 
 The NGINX Ingress Controller is deployed as a `LoadBalancer` service. Get its public IP to configure DNS (e.g. in ClouDNS):
@@ -284,7 +300,17 @@ Point your domain's `A` record (or `CNAME`) to the `EXTERNAL-IP` shown in the ou
 # Access the Sock Shop front-end
 kubectl port-forward svc/front-end -n sock-shop-dev 8080:80
 # → http://localhost:8080
+```
 
+The front-end landing page looks like this (home view with sock catalogue):
+
+![Sock Shop Frontend](images/frontend.png)
+
+After adding socks to your cart and going through the checkout flow, the shopping cart page is shown below (items, quantities, subtotal and the Proceed to checkout button):
+
+![Shopping Cart](images/cart.png)
+
+```bash
 # Access Grafana
 kubectl port-forward svc/grafana -n monitoring 3000:80
 # → http://localhost:3000
@@ -293,6 +319,10 @@ kubectl port-forward svc/grafana -n monitoring 3000:80
 kubectl port-forward svc/prometheus -n monitoring 9090:9090
 # → http://localhost:9090
 ```
+
+Prometheus exposes its expression browser, Alert status, and the list of scrape targets. Open `/targets` from the top menu to verify that all Sock Shop services are being actively scraped:
+
+![Prometheus Targets](images/Prometheus.png)
 
 ### Health checks
 
